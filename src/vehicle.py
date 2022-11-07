@@ -210,7 +210,7 @@ class Vehicle:
         RETURN_DURATION_SECONDS = 0.8
         STRAIGHT_DRIVE_DURATION_SECONDS = 0
         
-        proportional_gain = 0.15
+        proportional_gain = 0.13
         if self.current_lane == SECOND_LANE:
             proportional_gain *= -1
 
