@@ -114,23 +114,20 @@ class Vehicle:
             
             self.slow_down_vehicle()
 
-            if self.detect_parking():
-                self.start_parking()
-                self.drive_base.stop()
-                self.ev3.speaker.beep()
-                return
-            # if Vehicle.detect_red_color(self.sensor_l.rgb()) or Vehicle.detect_red_color(self.sensor_r.rgb()):
-            #     self.lab_finished = True
-            #     continue
+            if Vehicle.detect_red_color(self.sensor_l.rgb()) or Vehicle.detect_red_color(self.sensor_r.rgb()):
+                self.lab_finished = True
+                continue
             
-            # if self.lab_finished and self.detect_parking():
-            #     if not self.detect_first_parking_sign:
-            #         self.detect_first_parking_sign = True
-            #         continue
-            #     else:
-            #         self.ev3.speaker.beep()
-            #         self.start_parking()
-            #         return
+            if self.lab_finished and self.detect_parking():
+                if not self.detect_first_parking_sign:
+                    self.detect_first_parking_sign = True
+                    continue
+                else:
+                    self.ev3.speaker.beep()
+                    self.start_parking()
+                    self.drive_base.stop()
+                    self.ev3.speaker.beep()
+                    return
             
             self.drive_base.drive(DRIVE_SPEED, turn_rate)
     
