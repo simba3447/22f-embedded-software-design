@@ -63,6 +63,8 @@ class Vehicle:
 
         self.last_break_datetime = time.time()
         self.last_obstarcle_datetime = time.time()
+        self.lab_end_block_datetime = time.time()
+        self.park_block_datetime = time.time()
 
         self.break_block_count = 0
         self.terminate_block_count = 0
@@ -70,6 +72,10 @@ class Vehicle:
         self.park_block_count = 0
 
         self.obstarcle_block_detector = BlockDetector(queue_len = 6, decision_criteria = 3)
+        # TODO: Improve block detection method to use statistics
+        self.red_block_detector = BlockDetector(queue_len = 3, decision_criteria = 1)
+        self.yellow_block_detector = BlockDetector(queue_len = 3, decision_criteria = 1)
+        self.blue_block_detector = BlockDetector(queue_len = 3, decision_criteria = 1)
 
         self.current_lane = FIRST_LANE
 
@@ -115,19 +121,36 @@ class Vehicle:
             self.slow_down_vehicle()
 
             if Vehicle.detect_red_color(self.sensor_l.rgb()) or Vehicle.detect_red_color(self.sensor_r.rgb()):
+                print("!!!!!!!!! RED COLOR DETECTED !!!!!!!!!")
+
+                self.red_block_detector.add_detection_result(True)
+
+                if not self.red_block_detector.detect_block():
+                    pass
+                if time.time() - self.lab_end_block_datetime < 3:
+                    pass
+                
+                self.ev3.speaker.beep()
                 self.lab_finished = True
-                continue
-            
+                self.lab_end_block_datetime = time.time()
+                
+            else:
+                self.red_block_detector.add_detection_result(False)
+
             if self.lab_finished and self.detect_parking():
-                if not self.detect_first_parking_sign:
-                    self.detect_first_parking_sign = True
+                if time.time() - self.park_block_datetime < 2:
                     continue
                 else:
-                    self.ev3.speaker.beep()
-                    self.start_parking()
-                    self.drive_base.stop()
-                    self.ev3.speaker.beep()
-                    return
+                    if not self.detect_first_parking_sign:
+                        self.detect_first_parking_sign = True
+                        self.park_block_datetime = time.time()
+                        continue
+                    else:
+                        self.ev3.speaker.beep()
+                        self.start_parking()
+                        self.drive_base.stop()
+                        self.ev3.speaker.beep()
+                        return
             
             self.drive_base.drive(DRIVE_SPEED, turn_rate)
     
@@ -151,31 +174,43 @@ class Vehicle:
         
     def pause_vehicle(self):
         if (Vehicle.detect_blue_color(self.sensor_l.rgb()) or Vehicle.detect_blue_color(self.sensor_r.rgb())):
-            if int(time.time()) - int(self.last_break_datetime) < 5:
-                return
+            self.blue_block_detector.add_detection_result(True)
 
-            if self.break_block_count < BREAK_BLOCK_DETECT_COUNT_THRESHOLD:
-                self.break_block_count += 1
+            print("!!!!!!!!! BLUE COLOR DETECTED !!!!!!!!!")
+            if time.time() - self.last_break_datetime < 2:
                 return
             
+            if not self.blue_block_detector.detect_block():
+                return
+            # if self.break_block_count < BREAK_BLOCK_DETECT_COUNT_THRESHOLD:
+            #     self.break_block_count += 1
+            #     return
+            self.ev3.speaker.beep()
             self.drive_base.stop()
             wait(3000)
 
             self.last_break_datetime = time.time()
             self.break_block_count = 0
+            self.blue_block_detector.reset_detection_result()
+        else:
+            self.blue_block_detector.add_detection_result(False)
 
     def slow_down_vehicle(self):
         SLOW_DRIVE_SPEED = DRIVE_SPEED / 2
-        SLOW_DRIVE_DURATION = 2
+        SLOW_DRIVE_DURATION = 2.5
 
         if (Vehicle.detect_yellow_color(self.sensor_l.rgb()) or Vehicle.detect_yellow_color(self.sensor_r.rgb())):
-            # if time.time() - self.last_break_datetime < 100:
-                # return
+            print("!!!!!!!!! YELLOW COLOR DETECTED !!!!!!!!!")
 
-            if self.break_block_count < BREAK_BLOCK_DETECT_COUNT_THRESHOLD:
-                self.break_block_count += 1
+            self.yellow_block_detector.add_detection_result(True)
+            
+            if not self.yellow_block_detector.detect_block():
                 return
             
+            if time.time() - self.last_break_datetime < 2:
+                return
+
+            self.ev3.speaker.beep()
             slow_down_start_time = time.time()
 
             while True:
@@ -185,6 +220,10 @@ class Vehicle:
                 turn_rate = self._get_turn_rate()
 
                 self.drive_base.drive(SLOW_DRIVE_SPEED, turn_rate)
+            self.last_break_datetime = time.time()
+        else:
+            self.yellow_block_detector.add_detection_result(False)
+
 
     def change_lane(self):
         OBSTARCLE_DETECT_DISTANCE = 250
@@ -246,10 +285,10 @@ class Vehicle:
                 weight += weight_increment_amount
 
             total_turn_rate = turn_rate * (1 - weight) + temp_turn_rate * weight
-            print("weight: " + "{:10.4f}".format(weight) + ", total_turn_rate: " + "{:10.4f}".format(total_turn_rate))
+            # print("weight: " + "{:10.4f}".format(weight) + ", total_turn_rate: " + "{:10.4f}".format(total_turn_rate))
             
             self.drive_base.drive(DRIVE_SPEED, total_turn_rate)
-        print("!!!!!!!!!!!!DONE")
+        # print("!!!!!!!!!!!! CHANGING LANE DONE")
         self.last_obstarcle_datetime = time.time()
         self.obstarcle_block_detector.reset_detection_result()
 
@@ -260,7 +299,8 @@ class Vehicle:
             self.current_lane = FIRST_LANE
 
     def detect_parking(self):
-        PARK_DETECT_DISTANCE_MILLIMETER = 100
+        # print(self.park_sensor.distance())
+        PARK_DETECT_DISTANCE_MILLIMETER = 200
         if int(self.park_sensor.distance()) < PARK_DETECT_DISTANCE_MILLIMETER:
             if self.park_block_count < OBSTARCLE_BLOCK_DETECT_COUNT_THRESHOLD:
                 self.park_block_count += 1
