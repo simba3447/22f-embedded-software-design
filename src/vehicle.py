@@ -1,52 +1,23 @@
 from pybricks.hubs import EV3Brick
 from pybricks.ev3devices import (Motor, ColorSensor, UltrasonicSensor)
-from pybricks.parameters import Port
 from pybricks.tools import wait
 from pybricks.robotics import DriveBase
 
 import time
 
-##########################
-### Start of Constants ###
+from src.blockdetector import BlockDetector
 
 DRIVE_SPEED = 100
 PROPORTIONAL_GAIN = 0.8
 BREAK_BLOCK_DETECT_COUNT_THRESHOLD = 3
-OBSTARCLE_BLOCK_DETECT_COUNT_THRESHOLD = 3
+OBSTACLE_BLOCK_DETECT_COUNT_THRESHOLD = 3
 PARK_BLOCK_DETECT_COUNT_THRESHOLD = 3
 
 RGB_LOWER_BOUND = 30
 RGB_UPPER_BOUND = 20
 
-#### End of Constants ####
-##########################
-
 FIRST_LANE = 0
 SECOND_LANE = 1
-
-
-class BlockDetector:
-    def __init__(self, queue_len: int, decision_criteria: int):
-        if decision_criteria > queue_len:
-            raise Exception("Error: Value of decision criteria could not be more than the length of queue")
-
-        self.queue_len = queue_len
-        self.decision_criteria = decision_criteria
-
-        self.detection_result_queue = []
-
-    def detect_block(self):
-        return len(self.detection_result_queue) == self.queue_len and sum(
-            self.detection_result_queue) >= self.decision_criteria
-
-    def add_detection_result(self, result: bool):
-        if len(self.detection_result_queue) == self.queue_len:
-            self.detection_result_queue.pop(0)
-
-        self.detection_result_queue.append(result)
-
-    def reset_detection_result(self):
-        self.detection_result_queue = []
 
 
 class Vehicle:
@@ -65,16 +36,16 @@ class Vehicle:
         self.park_sensor = UltrasonicSensor(port_sensor_park)
 
         self.last_break_datetime = time.time()
-        self.last_obstarcle_datetime = time.time()
+        self.last_obstacle_datetime = time.time()
         self.lab_end_block_datetime = time.time()
         self.park_block_datetime = time.time()
 
         self.break_block_count = 0
         self.terminate_block_count = 0
-        self.obstarcle_block_count = 0
+        self.obstacle_block_count = 0
         self.park_block_count = 0
 
-        self.obstarcle_block_detector = BlockDetector(queue_len=6, decision_criteria=3)
+        self.obstacle_block_detector = BlockDetector(queue_len=6, decision_criteria=3)
         self.red_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
         self.yellow_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
         self.blue_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
@@ -161,15 +132,12 @@ class Vehicle:
         if Vehicle.detect_blue_color(self.sensor_l.rgb()) or Vehicle.detect_blue_color(self.sensor_r.rgb()):
             self.blue_block_detector.add_detection_result(True)
 
-            print("!!!!!!!!! BLUE COLOR DETECTED !!!!!!!!!")
             if time.time() - self.last_break_datetime < 2:
                 return
 
             if not self.blue_block_detector.detect_block():
                 return
-            # if self.break_block_count < BREAK_BLOCK_DETECT_COUNT_THRESHOLD:
-            #     self.break_block_count += 1
-            #     return
+
             self.ev3.speaker.beep()
             self.drive_base.stop()
             wait(3000)
@@ -181,12 +149,10 @@ class Vehicle:
             self.blue_block_detector.add_detection_result(False)
 
     def slow_down_vehicle(self):
-        SLOW_DRIVE_SPEED = DRIVE_SPEED / 2
-        SLOW_DRIVE_DURATION = 2.5
+        slow_drive_speed = DRIVE_SPEED / 2
+        slow_drive_duration = 2.5
 
         if Vehicle.detect_yellow_color(self.sensor_l.rgb()) or Vehicle.detect_yellow_color(self.sensor_r.rgb()):
-            print("!!!!!!!!! YELLOW COLOR DETECTED !!!!!!!!!")
-
             self.yellow_block_detector.add_detection_result(True)
 
             if not self.yellow_block_detector.detect_block():
@@ -199,36 +165,32 @@ class Vehicle:
             slow_down_start_time = time.time()
 
             while True:
-                if time.time() - slow_down_start_time > SLOW_DRIVE_DURATION:
+                if time.time() - slow_down_start_time > slow_drive_duration:
                     break
 
                 turn_rate = self._get_turn_rate()
 
-                self.drive_base.drive(SLOW_DRIVE_SPEED, turn_rate)
+                self.drive_base.drive(slow_drive_speed, turn_rate)
             self.last_break_datetime = time.time()
         else:
             self.yellow_block_detector.add_detection_result(False)
 
     def change_lane(self):
-        OBSTARCLE_DETECT_DISTANCE = 250
+        obstacle_detect_distance = 250
 
-        if int(self.distance_sensor.distance()) < OBSTARCLE_DETECT_DISTANCE:
-            # TODO: Improve previous obstarcle log comparison
-            # if time.time() - self.last_obstarcle_datetime < 4:
-            #     self.obstarcle_block_detector.add_detection_result(False)
-            #     return
+        if int(self.distance_sensor.distance()) < obstacle_detect_distance:
 
-            if not self.obstarcle_block_detector.detect_block():
-                self.obstarcle_block_detector.add_detection_result(True)
+            if not self.obstacle_block_detector.detect_block():
+                self.obstacle_block_detector.add_detection_result(True)
                 return
 
             self._change_lane()
         else:
-            self.obstarcle_block_detector.add_detection_result(False)
+            self.obstacle_block_detector.add_detection_result(False)
 
     def _change_lane(self):
-        TURN_DURATION_SECONDS = 0.8
-        RETURN_DURATION_SECONDS = 0.8
+        turn_duration_seconds = 0.8
+        return_duration_seconds = 0.8
         proportional_gain = 0.13
 
         # Decide turn direction
@@ -239,14 +201,14 @@ class Vehicle:
 
         turn_start_time = time.time()
         while True:
-            if time.time() - turn_start_time > TURN_DURATION_SECONDS:
+            if time.time() - turn_start_time > turn_duration_seconds:
                 break
             turn_rate += proportional_gain
             self.drive_base.drive(DRIVE_SPEED, turn_rate)
 
         turn_start_time = time.time()
         while True:
-            if time.time() - turn_start_time > RETURN_DURATION_SECONDS * 2:
+            if time.time() - turn_start_time > return_duration_seconds * 2:
                 break
 
             turn_rate -= proportional_gain
@@ -257,7 +219,7 @@ class Vehicle:
         weight_increment_amount = 0.03
         turn_start_time = time.time()
         while True:
-            if time.time() - turn_start_time > TURN_DURATION_SECONDS:
+            if time.time() - turn_start_time > turn_duration_seconds:
                 break
             turn_rate += proportional_gain
 
@@ -267,12 +229,10 @@ class Vehicle:
                 weight += weight_increment_amount
 
             total_turn_rate = turn_rate * (1 - weight) + temp_turn_rate * weight
-            # print("weight: " + "{:10.4f}".format(weight) + ", total_turn_rate: " + "{:10.4f}".format(total_turn_rate))
 
             self.drive_base.drive(DRIVE_SPEED, total_turn_rate)
-        # print("!!!!!!!!!!!! CHANGING LANE DONE")
-        self.last_obstarcle_datetime = time.time()
-        self.obstarcle_block_detector.reset_detection_result()
+        self.last_obstacle_datetime = time.time()
+        self.obstacle_block_detector.reset_detection_result()
 
         # Change current lane state
         if self.current_lane == FIRST_LANE:
@@ -281,17 +241,16 @@ class Vehicle:
             self.current_lane = FIRST_LANE
 
     def detect_parking(self):
-        # print(self.park_sensor.distance())
-        PARK_DETECT_DISTANCE_MILLIMETER = 200
-        if int(self.park_sensor.distance()) < PARK_DETECT_DISTANCE_MILLIMETER:
-            if self.park_block_count < OBSTARCLE_BLOCK_DETECT_COUNT_THRESHOLD:
+        park_detect_distance_millimeter = 200
+        if int(self.park_sensor.distance()) < park_detect_distance_millimeter:
+            if self.park_block_count < OBSTACLE_BLOCK_DETECT_COUNT_THRESHOLD:
                 self.park_block_count += 1
                 return False
             return True
         return False
 
     def start_parking(self):
-        REVERSE_DRIVE_SPEED = DRIVE_SPEED * -0.5
+        reverse_drive_speed = DRIVE_SPEED * -0.5
 
         wait(500)
 
@@ -301,7 +260,7 @@ class Vehicle:
         while True:
             if time.time() - straight_start_time > 1.5:
                 break
-            self.drive_base.drive(REVERSE_DRIVE_SPEED, turn_rate)
+            self.drive_base.drive(reverse_drive_speed, turn_rate)
 
         turn_start_time = time.time()
 
@@ -310,7 +269,7 @@ class Vehicle:
                 break
             turn_rate = -50
 
-            self.drive_base.drive(REVERSE_DRIVE_SPEED, turn_rate)
+            self.drive_base.drive(reverse_drive_speed, turn_rate)
 
         wait(500)
 
@@ -319,7 +278,7 @@ class Vehicle:
         while True:
             if time.time() - straight_start_time > 0.75:
                 break
-            self.drive_base.drive(REVERSE_DRIVE_SPEED, turn_rate)
+            self.drive_base.drive(reverse_drive_speed, turn_rate)
 
         wait(1000)
 
@@ -329,4 +288,4 @@ class Vehicle:
                 break
             turn_rate = 50
 
-            self.drive_base.drive(REVERSE_DRIVE_SPEED, turn_rate)
+            self.drive_base.drive(reverse_drive_speed, turn_rate)
