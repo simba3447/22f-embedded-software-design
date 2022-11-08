@@ -150,9 +150,8 @@ class Vehicle:
 
         
     def pause_vehicle(self):
-        # FIXME: Improve color detection logic using extra color sensor
         if (Vehicle.detect_blue_color(self.sensor_l.rgb()) or Vehicle.detect_blue_color(self.sensor_r.rgb())):
-            if time.time() - self.last_break_datetime < 100:
+            if int(time.time()) - int(self.last_break_datetime) < 5:
                 return
 
             if self.break_block_count < BREAK_BLOCK_DETECT_COUNT_THRESHOLD:
@@ -209,8 +208,9 @@ class Vehicle:
         TURN_DURATION_SECONDS = 0.8
         RETURN_DURATION_SECONDS = 0.8
         STRAIGHT_DRIVE_DURATION_SECONDS = 0
-        
         proportional_gain = 0.13
+
+        # Decide turn direction
         if self.current_lane == SECOND_LANE:
             proportional_gain *= -1
 
@@ -223,46 +223,37 @@ class Vehicle:
             turn_rate += proportional_gain
             self.drive_base.drive(DRIVE_SPEED, turn_rate)
         
-        return_start_time = time.time()
+        turn_start_time = time.time()
         while True:
-            if time.time() - return_start_time > RETURN_DURATION_SECONDS:
+            if time.time() - turn_start_time > RETURN_DURATION_SECONDS * 2:
                 break
 
             turn_rate -= proportional_gain
 
             self.drive_base.drive(DRIVE_SPEED, turn_rate)
         
-        # staight_drive_start_time = time.time()
-        # turn_rate = 0
-        # print("start straight drive")
-        # while True:
-        #     if time.time() - staight_drive_start_time > STRAIGHT_DRIVE_DURATION_SECONDS:
-        #         break
-
-        #     # print(turn_rate)
-
-        #     self.drive_base.drive(DRIVE_SPEED, turn_rate)
-
-        return_start_time = time.time()
-        while True:
-            if time.time() - return_start_time > RETURN_DURATION_SECONDS:
-                break
-
-            turn_rate -= proportional_gain
-
-            self.drive_base.drive(DRIVE_SPEED, turn_rate)
-        
-
+        weight = 0
+        weight_increment_amount = 0.03
         turn_start_time = time.time()
         while True:
             if time.time() - turn_start_time > TURN_DURATION_SECONDS:
                 break
             turn_rate += proportional_gain
-            self.drive_base.drive(DRIVE_SPEED, turn_rate)
 
+            temp_turn_rate = self._get_turn_rate()
+
+            if weight + weight_increment_amount < 1:
+                weight += weight_increment_amount
+
+            total_turn_rate = turn_rate * (1 - weight) + temp_turn_rate * weight
+            print("weight: " + "{:10.4f}".format(weight) + ", total_turn_rate: " + "{:10.4f}".format(total_turn_rate))
+            
+            self.drive_base.drive(DRIVE_SPEED, total_turn_rate)
+        print("!!!!!!!!!!!!DONE")
         self.last_obstarcle_datetime = time.time()
         self.obstarcle_block_detector.reset_detection_result()
 
+        # Change current lane state
         if self.current_lane == FIRST_LANE:
             self.current_lane = SECOND_LANE
         else:
