@@ -5,7 +5,7 @@ from pybricks.robotics import DriveBase
 
 import time
 
-from src.blockdetector import BlockDetector
+from src.objectdetector import ObjectDetector
 
 DRIVE_SPEED = 100
 PROPORTIONAL_GAIN = 0.8
@@ -45,10 +45,10 @@ class Vehicle:
         self.obstacle_block_count = 0
         self.park_block_count = 0
 
-        self.obstacle_block_detector = BlockDetector(queue_len=6, decision_criteria=3)
-        self.red_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
-        self.yellow_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
-        self.blue_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
+        self.obstacle_block_detector = ObjectDetector(queue_len=6, decision_criteria=3)
+        self.red_block_detector = ObjectDetector(queue_len=3, decision_criteria=1)
+        self.yellow_block_detector = ObjectDetector(queue_len=3, decision_criteria=1)
+        self.blue_block_detector = ObjectDetector(queue_len=3, decision_criteria=1)
 
         self.current_lane = FIRST_LANE
 
@@ -135,7 +135,7 @@ class Vehicle:
             if time.time() - self.last_break_datetime < 2:
                 return
 
-            if not self.blue_block_detector.detect_block():
+            if not self.blue_block_detector.detect_object():
                 return
 
             self.ev3.speaker.beep()
@@ -155,7 +155,7 @@ class Vehicle:
         if Vehicle.detect_yellow_color(self.sensor_l.rgb()) or Vehicle.detect_yellow_color(self.sensor_r.rgb()):
             self.yellow_block_detector.add_detection_result(True)
 
-            if not self.yellow_block_detector.detect_block():
+            if not self.yellow_block_detector.detect_object():
                 return
 
             if time.time() - self.last_break_datetime < 2:
@@ -180,7 +180,7 @@ class Vehicle:
 
         if int(self.distance_sensor.distance()) < obstacle_detect_distance:
 
-            if not self.obstacle_block_detector.detect_block():
+            if not self.obstacle_block_detector.detect_object():
                 self.obstacle_block_detector.add_detection_result(True)
                 return
 
