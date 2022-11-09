@@ -3,6 +3,9 @@ from abc import ABC, abstractmethod
 
 
 class State(ABC):
+    def __init__(self, machine):
+        self.machine = machine
+
     @abstractmethod
     def drive(self): pass
 
@@ -18,7 +21,7 @@ class State(ABC):
 
 class DrivingState(State):
     def __init__(self, machine):
-        self.machine = machine
+        super(DrivingState, self).__init__(machine)
 
     def drive(self):
         pass
@@ -35,7 +38,7 @@ class DrivingState(State):
 
 class ObstacleDetectedState(State):
     def __init__(self, machine):
-        self.machine = machine
+        super(ObstacleDetectedState, self).__init__(machine)
 
     def drive(self):
         pass
@@ -51,9 +54,9 @@ class ObstacleDetectedState(State):
         pass
 
 
-class BreakBlockDetectedState(State):
+class PauseBlockDetectedState(State):
     def __init__(self, machine):
-        self.machine = machine
+        super(PauseBlockDetectedState, self).__init__(machine)
 
     def drive(self):
         pass
@@ -62,7 +65,8 @@ class BreakBlockDetectedState(State):
         pass
 
     def pause(self):
-        pass
+        self.machine.pause()
+        self.machine.set_state(self.machine.get_driving_state())
 
     def slow_down(self):
         pass
@@ -70,7 +74,7 @@ class BreakBlockDetectedState(State):
 
 class SchoolZoneDetectedState(State):
     def __init__(self, machine):
-        self.machine = machine
+        super(SchoolZoneDetectedState, self).__init__(machine)
 
     def drive(self):
         pass
@@ -87,7 +91,7 @@ class SchoolZoneDetectedState(State):
 
 class LabFinishedState(State):
     def __init__(self, machine):
-        self.machine = machine
+        super(LabFinishedState, self).__init__(machine)
 
     def drive(self):
         pass
