@@ -43,7 +43,7 @@ class ColorDetector(ObjectDetector):
 
         self.last_detection_time = 0
 
-    def color_detected(self, rgb_left, rgb_right):
+    def color_detected(self, rgb_left: tuple[int, int, int], rgb_right: tuple[int, int, int]):
         self.add_detection_result(any([
             self._color_detected(rgb_left),
             self._color_detected(rgb_right),

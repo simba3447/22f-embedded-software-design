@@ -1,11 +1,11 @@
-from pybricks.ev3devices import ColorSensor, UltrasonicSensor
+from pybricks.ev3devices import Motor, ColorSensor, UltrasonicSensor
 from pybricks.hubs import EV3Brick
 from pybricks.parameters import Port
-from pybricks.pupdevices import Motor
 from pybricks.robotics import DriveBase
 from pybricks.tools import wait
 
 from src.enums import Lane
+from src.objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetector
 from src.state import DrivingState, ObstacleDetectedState, PauseBlockDetectedState, SchoolZoneDetectedState, \
     LabFinishedState, State
 
@@ -32,6 +32,10 @@ class Machine:
         self.ev3_brick = EV3Brick()
         self.drive_base = DriveBase(self.motor_left, self.motor_right, wheel_diameter=55.5, axle_track=104)
 
+        self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1)
+        self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1)
+        self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1)
+
     def drive(self):
         self.driving_state.drive()
 
@@ -41,6 +45,15 @@ class Machine:
     def get_driving_state(self):
         return self.driving_state
 
+    def get_pause_block_detected_state(self):
+        return self.pause_block_detected_state
+
+    def get_school_zone_block_detected_state(self):
+        return self.school_zone_detected_state
+
+    def get_lab_finished_state(self):
+        return self.lab_finished_state
+
     def pause(self):
         pause_duration_milliseconds = 3000
 
@@ -48,8 +61,14 @@ class Machine:
         self._stop()
         wait(pause_duration_milliseconds)
 
-    def detect_blue_color(self):
-        return any([self.left_color_sensor.rgb(), self.right_color_sensor.color()])
+    def detect_pause_block(self):
+        return self.blue_color_detector.color_detected(self.left_color_sensor.rgb(), self.right_color_sensor.rgb())
+
+    def detect_school_zone_block(self):
+        return self.yellow_color_detector.color_detected(self.left_color_sensor.rgb(), self.right_color_sensor.rgb())
+
+    def detect_lab_finish_line_block(self):
+        return self.red_color_detector.color_detected(self.left_color_sensor.rgb(), self.right_color_sensor.rgb())
 
     def _beep(self):
         self.ev3_brick.speaker.beep()

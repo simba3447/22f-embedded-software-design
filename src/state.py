@@ -1,9 +1,10 @@
-import time
 from abc import ABC, abstractmethod
+
+from src.machine import Machine
 
 
 class State(ABC):
-    def __init__(self, machine):
+    def __init__(self, machine: Machine):
         self.machine = machine
 
     @abstractmethod
@@ -24,7 +25,14 @@ class DrivingState(State):
         super(DrivingState, self).__init__(machine)
 
     def drive(self):
-        pass
+        while True:
+            if self.machine.detect_pause_block():
+                self.machine.set_state(self.machine.get_pause_block_detected_state())
+
+            if self.machine.detect_school_zone_block():
+                self.machine.set_state(self.machine.get_school_zone_block_detected_state())
+
+            self.machine.drive()
 
     def change_lane(self):
         pass
