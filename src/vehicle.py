@@ -2,10 +2,12 @@ from pybricks.hubs import EV3Brick
 from pybricks.ev3devices import (Motor, ColorSensor, UltrasonicSensor)
 from pybricks.tools import wait
 from pybricks.robotics import DriveBase
+from pybricks.messaging import BluetoothMailboxClient, BluetoothMailboxServer, TextMailbox
 
 import time
 
-from src.blockdetector import BlockDetector
+from blockdetector import BlockDetector
+from constants import SCHOOL_ZONE_SIGN, STOP_SIGN
 
 DRIVE_SPEED = 100
 PROPORTIONAL_GAIN = 0.8
@@ -19,12 +21,33 @@ RGB_UPPER_BOUND = 20
 FIRST_LANE = 0
 SECOND_LANE = 1
 
+MODE_LEADER = 0
+MODE_FOLLOWER = 1
+
 
 class Vehicle:
     def __init__(self, port_motor_l, port_motor_r, port_sensor_l, port_sensor_r, port_sensor_distance,
                  port_sensor_park):
         self.motor_l = Vehicle.initialize_motor(port_motor_l)
         self.motor_r = Vehicle.initialize_motor(port_motor_r)
+
+        self.platooning_mode = MODE_LEADER
+
+        if self.platooning_mode == MODE_FOLLOWER:
+            self.client = BluetoothMailboxClient()
+            self.mbox = TextMailbox('greeting', self.client)
+
+            print('establishing connection...')
+            self.client.connect('ksy')
+            print('connected!')
+        else:
+            self.server = BluetoothMailboxServer()
+            self.mbox = TextMailbox('greeting', self.server)
+
+            # The server must be started before the client!
+            print('waiting for connection...')
+            self.server.wait_for_connection()
+            print('connected!')
 
         self.ev3 = EV3Brick()
         self.drive_base = DriveBase(self.motor_l, self.motor_r, wheel_diameter=55.5, axle_track=104)
@@ -49,6 +72,9 @@ class Vehicle:
         self.red_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
         self.yellow_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
         self.blue_block_detector = BlockDetector(queue_len=3, decision_criteria=1)
+
+        self.stop_signal_detected = False
+        self.school_zone_signal_detected = False
 
         self.current_lane = FIRST_LANE
 
@@ -83,14 +109,18 @@ class Vehicle:
 
     def drive(self):
         self.ev3.speaker.beep()
-
+        # print("!!!!!!!! DRIVE STARTED")
         while True:
             turn_rate = self._get_turn_rate()
 
-            self.pause_vehicle()
-            self.change_lane()
+            if self.platooning_mode == MODE_LEADER:
+                self.pause_vehicle()
+                self.slow_down_vehicle()
+                # self.change_lane()
+            else:
+                self.receive_stop_signal()
+                self.receive_slow_down_signal()
 
-            self.slow_down_vehicle()
 
             if Vehicle.detect_red_color(self.sensor_l.rgb()) or Vehicle.detect_red_color(self.sensor_r.rgb()):
                 self.red_block_detector.add_detection_result(True)
@@ -122,7 +152,19 @@ class Vehicle:
                         self.ev3.speaker.beep()
                         return
 
-            self.drive_base.drive(DRIVE_SPEED, turn_rate)
+            drive_speed = DRIVE_SPEED
+
+            if self.platooning_mode == MODE_FOLLOWER:
+                weight = 0.5
+                objective_distance = 200
+                current_distance = self.distance_sensor.distance()
+                if current_distance > 240:
+                    current_distance = 240
+                    
+                bias = current_distance - objective_distance
+                drive_speed += weight * bias
+
+            self.drive_base.drive(drive_speed, turn_rate)
 
     def _get_turn_rate(self):
         deviation = self.sensor_l.reflection() - self.sensor_r.reflection()
@@ -138,6 +180,9 @@ class Vehicle:
             if not self.blue_block_detector.detect_block():
                 return
 
+            if self.platooning_mode == MODE_LEADER:
+                self.mbox.send('blue')
+
             self.ev3.speaker.beep()
             self.drive_base.stop()
             wait(3000)
@@ -150,7 +195,7 @@ class Vehicle:
 
     def slow_down_vehicle(self):
         slow_drive_speed = DRIVE_SPEED / 2
-        slow_drive_duration = 2.5
+        slow_drive_duration = 5
 
         if Vehicle.detect_yellow_color(self.sensor_l.rgb()) or Vehicle.detect_yellow_color(self.sensor_r.rgb()):
             self.yellow_block_detector.add_detection_result(True)
@@ -160,6 +205,9 @@ class Vehicle:
 
             if time.time() - self.last_break_datetime < 2:
                 return
+
+            if self.platooning_mode == MODE_LEADER:
+                self.mbox.send('yellow')
 
             self.ev3.speaker.beep()
             slow_down_start_time = time.time()
@@ -174,6 +222,38 @@ class Vehicle:
             self.last_break_datetime = time.time()
         else:
             self.yellow_block_detector.add_detection_result(False)
+
+    def receive_stop_signal(self):
+        if self.mbox.read() == STOP_SIGN:
+            if self.stop_signal_detected:
+                return
+            # print("!!!!!!!!! STOP SIGN RECEIVED")
+            self.ev3.speaker.beep()
+            self.drive_base.stop()
+            wait(3000)
+
+            self.stop_signal_detected = True
+    
+    def receive_slow_down_signal(self):
+        slow_drive_speed = DRIVE_SPEED / 2
+        slow_drive_duration = 2.5
+
+        if self.mbox.read() == SCHOOL_ZONE_SIGN:
+            if self.school_zone_signal_detected:
+                return
+            # print("!!!!!!!!! SCHOOL ZONE SIGN RECEIVED")
+            self.ev3.speaker.beep()
+            slow_down_start_time = time.time()
+
+            while True:
+                if time.time() - slow_down_start_time > slow_drive_duration:
+                    break
+
+                turn_rate = self._get_turn_rate()
+
+                self.drive_base.drive(slow_drive_speed, turn_rate)
+            
+            self.school_zone_signal_detected = True
 
     def change_lane(self):
         obstacle_detect_distance = 250
