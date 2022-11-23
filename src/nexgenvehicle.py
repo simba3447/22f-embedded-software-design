@@ -1,3 +1,5 @@
+from abc import abstractmethod
+
 from pybricks.ev3devices import Motor, ColorSensor, UltrasonicSensor
 from pybricks.hubs import EV3Brick
 from pybricks.parameters import Port
@@ -9,17 +11,17 @@ from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetec
 
 import time
 
-class PlatooningConfiguration:
-    PLATOONING_OFF = 0
-    PLATOONING_LEADER = 1
-    PLATOONING_FOLLOWER = 2
 
-class NexGenVehicle:
+class NexGenVehicleFactory:
+    class PlatooningConfiguration:
+        PLATOONING_OFF = 0
+        PLATOONING_LEADER = 1
+        PLATOONING_FOLLOWER = 2
+
     drive_speed = 100
     proportional_gain = 0.8
 
-    def __init__(self, platooning_mode = PlatooningConfiguration.PLATOONING_OFF):
-        self.platooning_mode = platooning_mode
+    def __init__(self):
         self.current_lane = Lane.FIRST_LANE
 
         self.left_color_sensor = ColorSensor(Port.S1)
@@ -36,6 +38,18 @@ class NexGenVehicle:
         self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
         self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
         self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
+
+    @classmethod
+    def create_vehicle(cls, platooning_mode = PlatooningConfiguration.PLATOONING_OFF):
+        cls_dict = {
+            cls.PlatooningConfiguration.PLATOONING_OFF: StandaloneVehicle,
+            cls.PlatooningConfiguration.PLATOONING_LEADER: PlatooningLeaderVehicle,
+            cls.PlatooningConfiguration.PLATOONING_FOLLOWER: PlatooningFollowerVehicle,
+        }
+        try:
+            return cls_dict.get(platooning_mode)()
+        except KeyError:
+            raise Exception('platooning_mode not defined')
 
     def drive(self):
         self._beep()
@@ -70,14 +84,17 @@ class NexGenVehicle:
             self._drive(self.drive_speed / 2)
         self._beep()
 
+    @abstractmethod
     def detect_pause_block(self):
-        return self.blue_color_detector.color_detected()
+        pass
 
+    @abstractmethod
     def detect_school_zone_block(self):
-        return self.yellow_color_detector.color_detected()
+        pass
 
+    @abstractmethod
     def detect_lab_end_block(self):
-        return self.red_color_detector.color_detected()
+        pass
 
     def _drive(self, drive_speed):
         self.drive_base.drive(
@@ -95,3 +112,41 @@ class NexGenVehicle:
 
     def _stop(self):
         self.drive_base.stop()
+
+class StandaloneVehicle(NexGenVehicleFactory):
+    def __init__(self):
+        self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
+        self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
+        self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
+
+        super(StandaloneVehicle, self).__init__()
+
+    def detect_pause_block(self):
+        return self.blue_color_detector.color_detected()
+
+    def detect_school_zone_block(self):
+        return self.yellow_color_detector.color_detected()
+
+    def detect_lab_end_block(self):
+        return self.red_color_detector.color_detected()
+
+
+class PlatooningLeaderVehicle(StandaloneVehicle):
+    def pause(self):
+        # TODO: send pause signal to follower vehicle
+        super(PlatooningLeaderVehicle, self).pause()
+
+    def slow_down_vehicle(self):
+        # TODO: send slow down signal to follower vehicle
+        super(PlatooningLeaderVehicle, self).slow_down_vehicle()
+
+
+class PlatooningFollowerVehicle(NexGenVehicleFactory):
+    def detect_pause_block(self):
+        pass
+
+    def detect_school_zone_block(self):
+        pass
+
+    def detect_lab_end_block(self):
+        pass
