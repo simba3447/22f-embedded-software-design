@@ -74,14 +74,14 @@ class ColorDetector(ObjectDetector):
 
 class RedColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red > ColorDetector.RGB_LOWER_BOUND and rgb.green < ColorDetector.RGB_UPPER_BOUND and rgb.blue < ColorDetector.RGB_UPPER_BOUND
+        return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND
 
 
 class BlueColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red > ColorDetector.RGB_LOWER_BOUND and rgb.green < ColorDetector.RGB_UPPER_BOUND and rgb.blue < ColorDetector.RGB_UPPER_BOUND
+        return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND
 
 
 class YellowColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red > ColorDetector.RGB_LOWER_BOUND and rgb.green < ColorDetector.RGB_UPPER_BOUND and rgb.blue < ColorDetector.RGB_UPPER_BOUND
+        return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND

@@ -35,10 +35,6 @@ class NexGenVehicleFactory:
         self.ev3_brick = EV3Brick()
         self.drive_base = DriveBase(self.motor_left, self.motor_right, wheel_diameter=55.5, axle_track=104)
 
-        self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
-        self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
-        self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
-
     @classmethod
     def create_vehicle(cls, platooning_mode = PlatooningConfiguration.PLATOONING_OFF):
         cls_dict = {
@@ -115,11 +111,12 @@ class NexGenVehicleFactory:
 
 class StandaloneVehicle(NexGenVehicleFactory):
     def __init__(self):
-        self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
-        self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
-        self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=[self.left_color_sensor, self.right_color_sensor])
-
         super(StandaloneVehicle, self).__init__()
+
+        color_sensor_list = [self.left_color_sensor, self.right_color_sensor]
+        self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=color_sensor_list)
+        self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=color_sensor_list)
+        self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=color_sensor_list)
 
     def detect_pause_block(self):
         return self.blue_color_detector.color_detected()
@@ -143,10 +140,13 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
 
 class PlatooningFollowerVehicle(NexGenVehicleFactory):
     def detect_pause_block(self):
+        # TODO: detect pause block using message from server vehicle
         pass
 
     def detect_school_zone_block(self):
+        # TODO: detect school zone block using message from server vehicle
         pass
 
     def detect_lab_end_block(self):
+        # TODO: detect lab end block using message from server vehicle
         pass
