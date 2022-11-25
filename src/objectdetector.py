@@ -85,3 +85,27 @@ class BlueColorDetector(ColorDetector):
 class YellowColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
         return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND
+
+class ObstacleDetector(ObjectDetector):
+    OBSTACLE_DETECT_DISTANCE_MILLIMETER = 250
+    SEPARATE_DETECTION_INTERVAL_SECONDS = 2
+
+    def __init__(self, queue_len: int, decision_criteria: int, ultrasonic_sensor):
+        super(ObstacleDetector, self).__init__(queue_len=queue_len, decision_criteria=decision_criteria)
+
+        self.ultrasonic_sensor = ultrasonic_sensor
+        self.last_detection_time = 0
+
+    def obstacle_detected(self):
+        self.add_detection_result(int(self.ultrasonic_sensor.distance()) < self.OBSTACLE_DETECT_DISTANCE_MILLIMETER)
+
+        if self.detect_object() and self._exceed_last_detection_interval():
+            self.last_detection_time = time.time()
+            return True
+        else:
+            return False
+
+    def _exceed_last_detection_interval(self):
+        current_time = time.time()
+
+        return current_time - self.last_detection_time >= self.SEPARATE_DETECTION_INTERVAL_SECONDS
