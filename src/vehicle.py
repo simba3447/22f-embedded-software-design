@@ -1,226 +1,126 @@
-from pybricks.hubs import EV3Brick
-from pybricks.ev3devices import (Motor, ColorSensor, UltrasonicSensor)
-from pybricks.tools import wait
-from pybricks.robotics import DriveBase
-
 import time
+from abc import abstractmethod
 
-from src.objectdetector import ObjectDetector
+from pybricks.ev3devices import Motor, ColorSensor, UltrasonicSensor
+from pybricks.hubs import EV3Brick
+from pybricks.parameters import Port
+from pybricks.robotics import DriveBase
+from pybricks.tools import wait
 
-DRIVE_SPEED = 100
-PROPORTIONAL_GAIN = 0.8
-BREAK_BLOCK_DETECT_COUNT_THRESHOLD = 3
-OBSTACLE_BLOCK_DETECT_COUNT_THRESHOLD = 3
-PARK_BLOCK_DETECT_COUNT_THRESHOLD = 3
-
-RGB_LOWER_BOUND = 30
-RGB_UPPER_BOUND = 20
-
-FIRST_LANE = 0
-SECOND_LANE = 1
+from enums import Lane
+from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetector, ObstacleDetector
+from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
 
 
-class Vehicle:
-    def __init__(self, port_motor_l, port_motor_r, port_sensor_l, port_sensor_r, port_sensor_distance,
-                 port_sensor_park):
-        self.motor_l = Vehicle.initialize_motor(port_motor_l)
-        self.motor_r = Vehicle.initialize_motor(port_motor_r)
+class VehicleFactory:
+    class PlatooningConfiguration:
+        PLATOONING_OFF = 0
+        PLATOONING_LEADER = 1
+        PLATOONING_FOLLOWER = 2
 
-        self.ev3 = EV3Brick()
-        self.drive_base = DriveBase(self.motor_l, self.motor_r, wheel_diameter=55.5, axle_track=104)
+    drive_speed = 100
+    proportional_gain = 0.8
 
-        self.sensor_l = Vehicle.initialize_color_sensor(port_sensor_l)
-        self.sensor_r = Vehicle.initialize_color_sensor(port_sensor_r)
+    def __init__(self):
+        # Initialize EV3 hardware components
+        self._left_color_sensor = ColorSensor(Port.S1)
+        self._right_color_sensor = ColorSensor(Port.S4)
+        self._obstacle_sensor = UltrasonicSensor(Port.S3)
+        self._parking_lot_sensor = UltrasonicSensor(Port.S2)
 
-        self.distance_sensor = UltrasonicSensor(port_sensor_distance)
-        self.park_sensor = UltrasonicSensor(port_sensor_park)
+        self._motor_left = Motor(Port.B)
+        self._motor_right = Motor(Port.C)
 
-        self.last_break_datetime = time.time()
-        self.last_obstacle_datetime = time.time()
-        self.lab_end_block_datetime = time.time()
-        self.park_block_datetime = time.time()
+        self._ev3_brick = EV3Brick()
+        self._drive_base = DriveBase(self._motor_left, self._motor_right, wheel_diameter=55.5, axle_track=104)
 
-        self.break_block_count = 0
-        self.terminate_block_count = 0
-        self.obstacle_block_count = 0
-        self.park_block_count = 0
+        self._parking_strategy = ParallelParkingStrategy(self)
 
-        self.obstacle_block_detector = ObjectDetector(queue_len=6, threshold=3)
-        self.red_block_detector = ObjectDetector(queue_len=3, threshold=1)
-        self.yellow_block_detector = ObjectDetector(queue_len=3, threshold=1)
-        self.blue_block_detector = ObjectDetector(queue_len=3, threshold=1)
-
-        self.current_lane = FIRST_LANE
-
+        # Set vehicle's initial states
+        self.current_lane = Lane.FIRST_LANE
         self.lab_finished = False
-        self.detect_first_parking_sign = False
+        self.first_parking_lot_indicator_detected = False
 
     @classmethod
-    def initialize_motor(cls, port_motor):
-        return Motor(port_motor)
+    def create_vehicle(cls, platooning_mode=PlatooningConfiguration.PLATOONING_OFF):
+        vehicle_class_dict = {
+            cls.PlatooningConfiguration.PLATOONING_OFF: StandaloneVehicle,
+            cls.PlatooningConfiguration.PLATOONING_LEADER: PlatooningLeaderVehicle,
+            cls.PlatooningConfiguration.PLATOONING_FOLLOWER: PlatooningFollowerVehicle,
+        }
+        try:
+            return vehicle_class_dict[platooning_mode]()
+        except KeyError:
+            raise Exception('platooning_mode not defined')
 
-    @classmethod
-    def initialize_color_sensor(cls, port_sensor):
-        return ColorSensor(port_sensor)
-
-    @classmethod
-    def detect_blue_color(cls, rgb_data):
-        red, green, blue = rgb_data
-
-        return red < RGB_UPPER_BOUND and green < RGB_UPPER_BOUND and blue > RGB_LOWER_BOUND
-
-    @classmethod
-    def detect_red_color(cls, rgb_data):
-        red, green, blue = rgb_data
-
-        return red > RGB_LOWER_BOUND and green < RGB_UPPER_BOUND and blue < RGB_UPPER_BOUND
-
-    @classmethod
-    def detect_yellow_color(cls, rgb_data):
-        red, green, blue = rgb_data
-
-        return red > RGB_LOWER_BOUND and green > RGB_LOWER_BOUND and blue < RGB_UPPER_BOUND
-
-    def drive(self):
-        self.ev3.speaker.beep()
+    def start_driving(self):
+        self._beep()
 
         while True:
-            turn_rate = self._get_turn_rate()
+            # TODO: Implement pre-driving method using detector and handler registry
+            if self.detect_pause_block():
+                self.pause()
 
-            self.pause_vehicle()
-            self.change_lane()
+            if self.detect_school_zone_block():
+                self.slow_down_vehicle()
 
-            self.slow_down_vehicle()
+            if self.detect_obstacle():
+                self.change_lane()
 
-            if Vehicle.detect_red_color(self.sensor_l.rgb()) or Vehicle.detect_red_color(self.sensor_r.rgb()):
-                self.red_block_detector.add_detection_result(True)
-
-                if not self.red_block_detector.detect_block():
-                    pass
-                if time.time() - self.lab_end_block_datetime < 3:
-                    pass
-
-                self.ev3.speaker.beep()
+            if self.detect_lab_end_block():
+                # TODO: Enable parking lot detector
                 self.lab_finished = True
-                self.lab_end_block_datetime = time.time()
 
-            else:
-                self.red_block_detector.add_detection_result(False)
+            if self.detect_parking_lot():
+                self._parking_strategy.start_parking()
 
-            if self.lab_finished and self.detect_parking():
-                if time.time() - self.park_block_datetime < 2:
-                    continue
-                else:
-                    if not self.detect_first_parking_sign:
-                        self.detect_first_parking_sign = True
-                        self.park_block_datetime = time.time()
-                        continue
-                    else:
-                        self.ev3.speaker.beep()
-                        self.start_parking()
-                        self.drive_base.stop()
-                        self.ev3.speaker.beep()
-                        return
+            self.drive(self.drive_speed)
 
-            self.drive_base.drive(DRIVE_SPEED, turn_rate)
+    def pause(self):
+        pause_duration_milliseconds = 3000
 
-    def _get_turn_rate(self):
-        deviation = self.sensor_l.reflection() - self.sensor_r.reflection()
-        return PROPORTIONAL_GAIN * deviation
-
-    def pause_vehicle(self):
-        if Vehicle.detect_blue_color(self.sensor_l.rgb()) or Vehicle.detect_blue_color(self.sensor_r.rgb()):
-            self.blue_block_detector.add_detection_result(True)
-
-            if time.time() - self.last_break_datetime < 2:
-                return
-
-            if not self.blue_block_detector._exceed_detection_threshold():
-                return
-
-            self.ev3.speaker.beep()
-            self.drive_base.stop()
-            wait(3000)
-
-            self.last_break_datetime = time.time()
-            self.break_block_count = 0
-            self.blue_block_detector._reset_detection_result()
-        else:
-            self.blue_block_detector.add_detection_result(False)
+        self._beep()
+        self._stop()
+        wait(pause_duration_milliseconds)
+        self._beep()
 
     def slow_down_vehicle(self):
-        slow_drive_speed = DRIVE_SPEED / 2
-        slow_drive_duration = 2.5
+        slow_drive_speed = self.drive_speed / 2
+        slow_drive_duration_seconds = 2.5
+        slow_down_start_time = time.time()
 
-        if Vehicle.detect_yellow_color(self.sensor_l.rgb()) or Vehicle.detect_yellow_color(self.sensor_r.rgb()):
-            self.yellow_block_detector.add_detection_result(True)
-
-            if not self.yellow_block_detector._exceed_detection_threshold():
-                return
-
-            if time.time() - self.last_break_datetime < 2:
-                return
-
-            self.ev3.speaker.beep()
-            slow_down_start_time = time.time()
-
-            while True:
-                if time.time() - slow_down_start_time > slow_drive_duration:
-                    break
-
-                turn_rate = self._get_turn_rate()
-
-                self.drive_base.drive(slow_drive_speed, turn_rate)
-            self.last_break_datetime = time.time()
-        else:
-            self.yellow_block_detector.add_detection_result(False)
+        self._beep()
+        while time.time() - slow_down_start_time <= slow_drive_duration_seconds:
+            self.drive(slow_drive_speed)
+        self._beep()
 
     def change_lane(self):
-        obstacle_detect_distance = 250
-
-        if int(self.distance_sensor.distance()) < obstacle_detect_distance:
-
-            if not self.obstacle_block_detector._exceed_detection_threshold():
-                self.obstacle_block_detector.add_detection_result(True)
-                return
-
-            self._change_lane()
-        else:
-            self.obstacle_block_detector.add_detection_result(False)
-
-    def _change_lane(self):
+        # TODO: Refactor code
         turn_duration_seconds = 0.8
         return_duration_seconds = 0.8
         proportional_gain = 0.13
 
         # Decide turn direction
-        if self.current_lane == SECOND_LANE:
+        if self.current_lane == Lane.SECOND_LANE:
             proportional_gain *= -1
 
+        # Set initial turn rate value
         turn_rate = self._get_turn_rate()
 
         turn_start_time = time.time()
-        while True:
-            if time.time() - turn_start_time > turn_duration_seconds:
-                break
+        while time.time() - turn_start_time <= turn_duration_seconds:
             turn_rate += proportional_gain
-            self.drive_base.drive(DRIVE_SPEED, turn_rate)
+            self._drive_base.drive(self.drive_speed, turn_rate)
 
         turn_start_time = time.time()
-        while True:
-            if time.time() - turn_start_time > return_duration_seconds * 2:
-                break
-
+        while time.time() - turn_start_time <= return_duration_seconds * 2:
             turn_rate -= proportional_gain
-
-            self.drive_base.drive(DRIVE_SPEED, turn_rate)
+            self._drive_base.drive(self.drive_speed, turn_rate)
 
         weight = 0
         weight_increment_amount = 0.03
         turn_start_time = time.time()
-        while True:
-            if time.time() - turn_start_time > turn_duration_seconds:
-                break
+        while time.time() - turn_start_time <= turn_duration_seconds:
             turn_rate += proportional_gain
 
             temp_turn_rate = self._get_turn_rate()
@@ -230,62 +130,136 @@ class Vehicle:
 
             total_turn_rate = turn_rate * (1 - weight) + temp_turn_rate * weight
 
-            self.drive_base.drive(DRIVE_SPEED, total_turn_rate)
-        self.last_obstacle_datetime = time.time()
-        self.obstacle_block_detector._reset_detection_result()
+            self._drive_base.drive(self.drive_speed, total_turn_rate)
 
-        # Change current lane state
-        if self.current_lane == FIRST_LANE:
-            self.current_lane = SECOND_LANE
-        else:
-            self.current_lane = FIRST_LANE
+        self.current_lane = Lane.SECOND_LANE if self.current_lane == Lane.FIRST_LANE else Lane.FIRST_LANE
 
-    def detect_parking(self):
-        park_detect_distance_millimeter = 200
-        if int(self.park_sensor.distance()) < park_detect_distance_millimeter:
-            if self.park_block_count < OBSTACLE_BLOCK_DETECT_COUNT_THRESHOLD:
-                self.park_block_count += 1
-                return False
-            return True
-        return False
+    @abstractmethod
+    def detect_pause_block(self):
+        pass
+
+    @abstractmethod
+    def detect_school_zone_block(self):
+        pass
+
+    @abstractmethod
+    def detect_lab_end_block(self):
+        pass
+
+    @abstractmethod
+    def detect_obstacle(self):
+        pass
+
+    @abstractmethod
+    def detect_parking_lot(self):
+        pass
+
+    def drive(self, drive_speed, turn_rate=None):
+        if turn_rate is None:
+            turn_rate = self._get_turn_rate()
+
+        self._drive_base.drive(
+            speed=drive_speed,
+            turn_rate=turn_rate
+        )
 
     def start_parking(self):
-        reverse_drive_speed = DRIVE_SPEED * -0.5
+        self._parking_strategy.start_parking()
 
-        wait(500)
+    def _get_turn_rate(self):
+        deviation = self._left_color_sensor.reflection() - self._right_color_sensor.reflection()
 
-        turn_rate = 0
+        return self.proportional_gain * deviation
 
-        straight_start_time = time.time()
-        while True:
-            if time.time() - straight_start_time > 1.5:
-                break
-            self.drive_base.drive(reverse_drive_speed, turn_rate)
+    def _beep(self):
+        self._ev3_brick.speaker.beep()
 
-        turn_start_time = time.time()
+    def _stop(self):
+        self._drive_base.stop()
 
-        while True:
-            if time.time() - turn_start_time > 1.5:
-                break
-            turn_rate = -50
 
-            self.drive_base.drive(reverse_drive_speed, turn_rate)
+class StandaloneVehicle(VehicleFactory):
+    def __init__(self):
+        super(StandaloneVehicle, self).__init__()
 
-        wait(500)
+        color_sensor_list = [self._left_color_sensor, self._right_color_sensor]
+        self.blue_color_detector = BlueColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
+        self.yellow_color_detector = YellowColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
+        self.red_color_detector = RedColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
+        self.obstacle_detector = ObstacleDetector(queue_len=6, threshold=3, ultrasonic_sensor=self._obstacle_sensor)
+        self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=True)
 
-        turn_rate = 0
-        straight_start_time = time.time()
-        while True:
-            if time.time() - straight_start_time > 0.75:
-                break
-            self.drive_base.drive(reverse_drive_speed, turn_rate)
+    def detect_pause_block(self):
+        return self.blue_color_detector.detected()
 
-        wait(1000)
+    def detect_school_zone_block(self):
+        return self.yellow_color_detector.detected()
 
-        turn_start_time = time.time()
-        while True:
-            if time.time() - turn_start_time > 2:
-                break
-            turn_rate = 50
+    def detect_lab_end_block(self):
+        return self.red_color_detector.detected()
 
-            self.drive_base.drive(reverse_drive_speed, turn_rate)
+    def detect_obstacle(self):
+        return self.obstacle_detector.detected()
+
+    def detect_parking_lot(self):
+        if self.parking_lot_detector.detected():
+            if self.first_parking_lot_indicator_detected:
+                return True
+            else:
+                self.first_parking_lot_indicator_detected = True
+                return False
+        else:
+            return False
+
+
+class PlatooningLeaderVehicle(StandaloneVehicle):
+    def __init__(self):
+        super(PlatooningLeaderVehicle, self).__init__()
+
+        # TODO: Initialize network configuration for platooning drive
+        self.parking_strategy = ReversePerpendicularParkingStrategy(self)
+
+    def pause(self):
+        # TODO: send pause signal to follower vehicle
+        super(PlatooningLeaderVehicle, self).pause()
+
+    def slow_down_vehicle(self):
+        # TODO: send slow down signal to follower vehicle
+        super(PlatooningLeaderVehicle, self).slow_down_vehicle()
+
+
+class PlatooningFollowerVehicle(VehicleFactory):
+    def __init__(self):
+        super(PlatooningFollowerVehicle, self).__init__()
+
+        self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor)
+
+        # TODO: Initialize network configuration for platooning drive
+        self.parking_strategy = ReversePerpendicularParkingStrategy(self)
+
+    def detect_pause_block(self):
+        # TODO: detect pause block using message from server vehicle
+        pass
+
+    def detect_school_zone_block(self):
+        # TODO: detect school zone block using message from server vehicle
+        pass
+
+    def detect_lab_end_block(self):
+        # TODO: detect lab end block using message from server vehicle
+        pass
+
+    def detect_obstacle(self):
+        # TODO: detect obstacle using message from server vehicle
+        pass
+
+    def detect_parking_lot(self):
+        # TODO: Resolve code duplicates
+        if self.parking_lot_detector.detected():
+            if self.first_parking_lot_indicator_detected:
+                return True
+            else:
+                self.first_parking_lot_indicator_detected = True
+                return False
+        else:
+            return False

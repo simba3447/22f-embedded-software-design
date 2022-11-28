@@ -1,7 +1,7 @@
 #!/usr/bin/env pybricks-micropython
-from nexgenvehicle import NexGenVehicleFactory
+from vehicle import VehicleFactory
 
-vehicle = NexGenVehicleFactory.create_vehicle(
-    platooning_mode=NexGenVehicleFactory.PlatooningConfiguration.PLATOONING_OFF
+vehicle = VehicleFactory.create_vehicle(
+    platooning_mode=VehicleFactory.PlatooningConfiguration.PLATOONING_OFF
 )
 vehicle.start_driving()

@@ -5,7 +5,7 @@ from abc import abstractmethod
 class ObjectDetector:
     UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS = 2
 
-    def __init__(self, queue_len: int, threshold: int):
+    def __init__(self, queue_len: int, threshold: int, enabled: bool=True):
         if threshold > queue_len:
             raise Exception("Error: Value of decision criteria could not be more than the length of queue")
 
@@ -13,10 +13,14 @@ class ObjectDetector:
         self.threshold = threshold
 
         self.detection_result_queue = []
-
         self.last_detection_time = 0
 
+        self._enabled = enabled
+
     def detected(self):
+        if not self._enabled:
+            return False
+
         self._add_detection_result(self.decision_criteria())
         if self._exceed_detection_threshold() and self._exceed_last_detection_interval():
             self._update_last_detection_time()
@@ -28,6 +32,18 @@ class ObjectDetector:
     @abstractmethod
     def decision_criteria(self):
         pass
+
+    def enable(self):
+        if self._enabled:
+            raise Exception("Error: {} is already enabled".format(self.__class__.__name__))
+
+        self._enabled = True
+
+    def disable(self):
+        if not self._enabled:
+            raise Exception("Error: {} is already disabled".format(self.__class__.__name__))
+
+        self._enabled = False
 
     def _add_detection_result(self, result: bool):
         if len(self.detection_result_queue) == self.queue_len:
@@ -64,8 +80,8 @@ class ColorDetector(ObjectDetector):
     RGB_LOWER_BOUND = 30
     RGB_UPPER_BOUND = 20
 
-    def __init__(self, queue_len: int, threshold: int, color_sensor_list: list):
-        super(ColorDetector, self).__init__(queue_len=queue_len, threshold=threshold)
+    def __init__(self, queue_len: int, threshold: int, color_sensor_list: list, enabled: bool=True):
+        super(ColorDetector, self).__init__(queue_len=queue_len, threshold=threshold, enabled=enabled)
 
         self.color_sensor_list = color_sensor_list
         self.last_detection_time = 0
@@ -103,8 +119,8 @@ class YellowColorDetector(ColorDetector):
 class ObstacleDetector(ObjectDetector):
     OBSTACLE_DETECT_DISTANCE_MILLIMETER = 250
 
-    def __init__(self, queue_len: int, threshold: int, ultrasonic_sensor):
-        super(ObstacleDetector, self).__init__(queue_len=queue_len, threshold=threshold)
+    def __init__(self, queue_len: int, threshold: int, ultrasonic_sensor, enabled=True):
+        super(ObstacleDetector, self).__init__(queue_len=queue_len, threshold=threshold, enabled=enabled)
 
         self.ultrasonic_sensor = ultrasonic_sensor
 
