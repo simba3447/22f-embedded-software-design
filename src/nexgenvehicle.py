@@ -11,6 +11,8 @@ from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetec
 
 import time
 
+from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
+
 
 class NexGenVehicleFactory:
     class PlatooningConfiguration:
@@ -34,6 +36,8 @@ class NexGenVehicleFactory:
         self._ev3_brick = EV3Brick()
         self._drive_base = DriveBase(self._motor_left, self._motor_right, wheel_diameter=55.5, axle_track=104)
 
+        self._parking_strategy = ParallelParkingStrategy(self)
+
         # Set vehicle's initial states
         self.current_lane = Lane.FIRST_LANE
         self.lab_finished = False
@@ -50,7 +54,7 @@ class NexGenVehicleFactory:
         except KeyError:
             raise Exception('platooning_mode not defined')
 
-    def drive(self):
+    def start_driving(self):
         self._beep()
 
         while True:
@@ -64,10 +68,14 @@ class NexGenVehicleFactory:
                 self.change_lane()
 
             if self.detect_lab_end_block():
+                # TODO: Enable parking lot detector
+                # TODO: Implement parking strategy
                 self._beep()
                 return
 
-            self._drive(self.drive_speed)
+            # TODO: Detect parking lot indicator and start parking
+
+            self.drive(self.drive_speed)
 
     def pause(self):
         pause_duration_milliseconds = 3000
@@ -78,12 +86,13 @@ class NexGenVehicleFactory:
         self._beep()
 
     def slow_down_vehicle(self):
+        slow_drive_speed = self.drive_speed / 2
         slow_drive_duration_seconds = 2.5
         slow_down_start_time = time.time()
 
         self._beep()
         while time.time() - slow_down_start_time <= slow_drive_duration_seconds:
-            self._drive(self.drive_speed / 2)
+            self.drive(slow_drive_speed)
         self._beep()
 
     def change_lane(self):
@@ -126,7 +135,6 @@ class NexGenVehicleFactory:
 
         self.current_lane = Lane.SECOND_LANE if self.current_lane == Lane.FIRST_LANE else Lane.FIRST_LANE
 
-
     @abstractmethod
     def detect_pause_block(self):
         pass
@@ -143,11 +151,17 @@ class NexGenVehicleFactory:
     def detect_obstacle(self):
         pass
 
-    def _drive(self, drive_speed):
+    def drive(self, drive_speed, turn_rate=None):
+        if turn_rate is None:
+            turn_rate = self._get_turn_rate()
+
         self._drive_base.drive(
             speed=drive_speed,
-            turn_rate=self._get_turn_rate()
+            turn_rate=turn_rate
         )
+
+    def start_parking(self):
+        self._parking_strategy.start_parking()
 
     def _get_turn_rate(self):
         deviation = self._left_color_sensor.reflection() - self._right_color_sensor.reflection()
@@ -185,6 +199,11 @@ class StandaloneVehicle(NexGenVehicleFactory):
 
 
 class PlatooningLeaderVehicle(StandaloneVehicle):
+    def __init__(self):
+        super(PlatooningLeaderVehicle, self).__init__()
+
+        self.parking_strategy = ReversePerpendicularParkingStrategy(self)
+
     def pause(self):
         # TODO: send pause signal to follower vehicle
         super(PlatooningLeaderVehicle, self).pause()
@@ -195,6 +214,11 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
 
 
 class PlatooningFollowerVehicle(NexGenVehicleFactory):
+    def __init__(self):
+        super(PlatooningFollowerVehicle, self).__init__()
+
+        self.parking_strategy = ReversePerpendicularParkingStrategy(self)
+
     def detect_pause_block(self):
         # TODO: detect pause block using message from server vehicle
         pass

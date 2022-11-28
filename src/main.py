@@ -6,4 +6,4 @@ from nexgenvehicle import NexGenVehicleFactory
 vehicle = NexGenVehicleFactory.create_vehicle(
     platooning_mode=NexGenVehicleFactory.PlatooningConfiguration.PLATOONING_OFF
 )
-vehicle.drive()
+vehicle.start_driving()
