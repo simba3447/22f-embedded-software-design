@@ -1,6 +1,4 @@
 #!/usr/bin/env pybricks-micropython
-from pybricks.parameters import Port
-
 from nexgenvehicle import NexGenVehicleFactory
 
 vehicle = NexGenVehicleFactory.create_vehicle(

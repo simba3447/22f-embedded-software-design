@@ -1,13 +1,11 @@
-from abc import ABC, abstractmethod
-from pybricks.tools import wait
-
 import time
+from abc import ABC, abstractmethod
 
-from src.nexgenvehicle import NexGenVehicleFactory
+from pybricks.tools import wait
 
 
 class ParkingStrategy(ABC):
-    def __init__(self, vehicle: NexGenVehicleFactory):
+    def __init__(self, vehicle):
         self.vehicle = vehicle
 
     @abstractmethod

@@ -1,3 +1,4 @@
+import time
 from abc import abstractmethod
 
 from pybricks.ev3devices import Motor, ColorSensor, UltrasonicSensor
@@ -8,9 +9,6 @@ from pybricks.tools import wait
 
 from enums import Lane
 from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetector, ObstacleDetector
-
-import time
-
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
 
 
@@ -43,7 +41,7 @@ class NexGenVehicleFactory:
         self.lab_finished = False
 
     @classmethod
-    def create_vehicle(cls, platooning_mode = PlatooningConfiguration.PLATOONING_OFF):
+    def create_vehicle(cls, platooning_mode=PlatooningConfiguration.PLATOONING_OFF):
         vehicle_class_dict = {
             cls.PlatooningConfiguration.PLATOONING_OFF: StandaloneVehicle,
             cls.PlatooningConfiguration.PLATOONING_LEADER: PlatooningLeaderVehicle,
@@ -202,6 +200,7 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
     def __init__(self):
         super(PlatooningLeaderVehicle, self).__init__()
 
+        # TODO: Initialize network configuration for platooning drive
         self.parking_strategy = ReversePerpendicularParkingStrategy(self)
 
     def pause(self):
@@ -217,6 +216,7 @@ class PlatooningFollowerVehicle(NexGenVehicleFactory):
     def __init__(self):
         super(PlatooningFollowerVehicle, self).__init__()
 
+        # TODO: Initialize network configuration for platooning drive
         self.parking_strategy = ReversePerpendicularParkingStrategy(self)
 
     def detect_pause_block(self):
