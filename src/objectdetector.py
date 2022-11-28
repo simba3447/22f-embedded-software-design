@@ -1,22 +1,39 @@
+import abc
 import time
 from abc import abstractmethod
 
 
-class ObjectDetector:
-    def __init__(self, queue_len: int, decision_criteria: int):
-        if decision_criteria > queue_len:
+class ObjectDetector(abc.ABC):
+    UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS = 2
+
+    def __init__(self, queue_len: int, threshold: int):
+        if threshold > queue_len:
             raise Exception("Error: Value of decision criteria could not be more than the length of queue")
 
         self.queue_len = queue_len
-        self.decision_criteria = decision_criteria
+        self.threshold = threshold
 
         self.detection_result_queue = []
 
-    def detect_object(self):
-        return len(self.detection_result_queue) == self.queue_len and sum(
-            self.detection_result_queue) >= self.decision_criteria
+        self.last_detection_time = 0
 
-    def add_detection_result(self, result: bool):
+    def detected(self):
+        self._add_detection_result(self.decision_criteria())
+        if self._exceed_detection_threshold() and self._exceed_last_detection_interval():
+            self.last_detection_time = time.time()
+            return True
+        else:
+            return False
+
+    @abstractmethod
+    def decision_criteria(self):
+        pass
+
+    def _exceed_detection_threshold(self):
+        return len(self.detection_result_queue) == self.queue_len and sum(
+            self.detection_result_queue) >= self.threshold
+
+    def _add_detection_result(self, result: bool):
         if len(self.detection_result_queue) == self.queue_len:
             self.detection_result_queue.pop(0)
 
@@ -24,6 +41,11 @@ class ObjectDetector:
 
     def reset_detection_result(self):
         self.detection_result_queue = []
+
+    def _exceed_last_detection_interval(self):
+        current_time = time.time()
+
+        return current_time - self.last_detection_time >= self.UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS
 
 
 class ColorDetector(ObjectDetector):
@@ -39,28 +61,16 @@ class ColorDetector(ObjectDetector):
     RGB_LOWER_BOUND = 30
     RGB_UPPER_BOUND = 20
 
-    SEPARATE_DETECTION_INTERVAL_SECONDS = 2
-
-    def __init__(self, queue_len: int, decision_criteria: int, color_sensor_list: list):
-        super(ColorDetector, self).__init__(queue_len=queue_len, decision_criteria=decision_criteria)
+    def __init__(self, queue_len: int, threshold: int, color_sensor_list: list):
+        super(ColorDetector, self).__init__(queue_len=queue_len, threshold=threshold)
 
         self.color_sensor_list = color_sensor_list
         self.last_detection_time = 0
 
-    def color_detected(self):
-        self.add_detection_result(any(
+    def decision_criteria(self):
+        return any(
             self._color_detected(color_sensor.rgb()) for color_sensor in self.color_sensor_list,
-        ))
-        if self.detect_object() and self._exceed_last_detection_interval():
-            self.last_detection_time = time.time()
-            return True
-        else:
-            return False
-
-    def _exceed_last_detection_interval(self):
-        current_time = time.time()
-
-        return current_time - self.last_detection_time >= self.SEPARATE_DETECTION_INTERVAL_SECONDS
+        )
 
     def _color_detected(self, rgb: tuple[int, int, int]):
         red, green, blue = rgb
@@ -86,26 +96,14 @@ class YellowColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
         return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND
 
+
 class ObstacleDetector(ObjectDetector):
     OBSTACLE_DETECT_DISTANCE_MILLIMETER = 250
-    SEPARATE_DETECTION_INTERVAL_SECONDS = 2
 
-    def __init__(self, queue_len: int, decision_criteria: int, ultrasonic_sensor):
-        super(ObstacleDetector, self).__init__(queue_len=queue_len, decision_criteria=decision_criteria)
+    def __init__(self, queue_len: int, threshold: int, ultrasonic_sensor):
+        super(ObstacleDetector, self).__init__(queue_len=queue_len, threshold=threshold)
 
         self.ultrasonic_sensor = ultrasonic_sensor
-        self.last_detection_time = 0
 
-    def obstacle_detected(self):
-        self.add_detection_result(int(self.ultrasonic_sensor.distance()) < self.OBSTACLE_DETECT_DISTANCE_MILLIMETER)
-
-        if self.detect_object() and self._exceed_last_detection_interval():
-            self.last_detection_time = time.time()
-            return True
-        else:
-            return False
-
-    def _exceed_last_detection_interval(self):
-        current_time = time.time()
-
-        return current_time - self.last_detection_time >= self.SEPARATE_DETECTION_INTERVAL_SECONDS
+    def decision_criteria(self):
+        return int(self.ultrasonic_sensor.distance()) < self.OBSTACLE_DETECT_DISTANCE_MILLIMETER

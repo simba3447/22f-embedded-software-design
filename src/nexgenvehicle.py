@@ -160,27 +160,28 @@ class NexGenVehicleFactory:
     def _stop(self):
         self._drive_base.stop()
 
+
 class StandaloneVehicle(NexGenVehicleFactory):
     def __init__(self):
         super(StandaloneVehicle, self).__init__()
 
         color_sensor_list = [self._left_color_sensor, self._right_color_sensor]
-        self.blue_color_detector = BlueColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=color_sensor_list)
-        self.yellow_color_detector = YellowColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=color_sensor_list)
-        self.red_color_detector = RedColorDetector(queue_len=2, decision_criteria=1, color_sensor_list=color_sensor_list)
-        self.obstacle_detector = ObstacleDetector(queue_len=6, decision_criteria=3, ultrasonic_sensor=self._distance_sensor)
+        self.blue_color_detector = BlueColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
+        self.yellow_color_detector = YellowColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
+        self.red_color_detector = RedColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
+        self.obstacle_detector = ObstacleDetector(queue_len=6, threshold=3, ultrasonic_sensor=self._distance_sensor)
 
     def detect_pause_block(self):
-        return self.blue_color_detector.color_detected()
+        return self.blue_color_detector.detected()
 
     def detect_school_zone_block(self):
-        return self.yellow_color_detector.color_detected()
+        return self.yellow_color_detector.detected()
 
     def detect_lab_end_block(self):
-        return self.red_color_detector.color_detected()
+        return self.red_color_detector.detected()
 
     def detect_obstacle(self):
-        return self.obstacle_detector.obstacle_detected()
+        return self.obstacle_detector.detected()
 
 
 class PlatooningLeaderVehicle(StandaloneVehicle):
