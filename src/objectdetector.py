@@ -3,7 +3,7 @@ import time
 from abc import abstractmethod
 
 
-class ObjectDetector(abc.ABC):
+class ObjectDetector:
     UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS = 2
 
     def __init__(self, queue_len: int, threshold: int):
@@ -20,7 +20,8 @@ class ObjectDetector(abc.ABC):
     def detected(self):
         self._add_detection_result(self.decision_criteria())
         if self._exceed_detection_threshold() and self._exceed_last_detection_interval():
-            self.last_detection_time = time.time()
+            self._update_last_detection_time()
+            self._reset_detection_result()
             return True
         else:
             return False
@@ -29,23 +30,26 @@ class ObjectDetector(abc.ABC):
     def decision_criteria(self):
         pass
 
-    def _exceed_detection_threshold(self):
-        return len(self.detection_result_queue) == self.queue_len and sum(
-            self.detection_result_queue) >= self.threshold
-
     def _add_detection_result(self, result: bool):
         if len(self.detection_result_queue) == self.queue_len:
             self.detection_result_queue.pop(0)
 
         self.detection_result_queue.append(result)
 
-    def reset_detection_result(self):
-        self.detection_result_queue = []
+    def _exceed_detection_threshold(self):
+        return len(self.detection_result_queue) == self.queue_len and sum(
+            self.detection_result_queue) >= self.threshold
 
     def _exceed_last_detection_interval(self):
         current_time = time.time()
 
         return current_time - self.last_detection_time >= self.UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS
+
+    def _update_last_detection_time(self):
+        self.last_detection_time = time.time()
+
+    def _reset_detection_result(self):
+        self.detection_result_queue = []
 
 
 class ColorDetector(ObjectDetector):

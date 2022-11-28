@@ -144,7 +144,7 @@ class Vehicle:
 
             self.last_break_datetime = time.time()
             self.break_block_count = 0
-            self.blue_block_detector.reset_detection_result()
+            self.blue_block_detector._reset_detection_result()
         else:
             self.blue_block_detector.add_detection_result(False)
 
@@ -232,7 +232,7 @@ class Vehicle:
 
             self.drive_base.drive(DRIVE_SPEED, total_turn_rate)
         self.last_obstacle_datetime = time.time()
-        self.obstacle_block_detector.reset_detection_result()
+        self.obstacle_block_detector._reset_detection_result()
 
         # Change current lane state
         if self.current_lane == FIRST_LANE:
