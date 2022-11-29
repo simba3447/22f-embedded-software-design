@@ -3,10 +3,12 @@ from abc import abstractmethod
 
 from pybricks.ev3devices import Motor, ColorSensor, UltrasonicSensor
 from pybricks.hubs import EV3Brick
+from pybricks.messaging import BluetoothMailboxClient, BluetoothMailboxServer, TextMailbox
 from pybricks.parameters import Port
 from pybricks.robotics import DriveBase
 from pybricks.tools import wait
 
+from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN
 from enums import Lane
 from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetector, ObstacleDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
@@ -216,15 +218,22 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
     def __init__(self):
         super(PlatooningLeaderVehicle, self).__init__()
 
-        # TODO: Initialize network configuration for platooning drive
+        self.server = BluetoothMailboxServer()
+        self.mbox = TextMailbox(MAILBOX_NAME, self.server)
+
+        # The server must be started before the client!
+        print('waiting for connection...')
+        self.server.wait_for_connection()
+        print('connected!')
+
         self.parking_strategy = ReversePerpendicularParkingStrategy(self)
 
     def pause(self):
-        # TODO: send pause signal to follower vehicle
+        self.mbox.send(STOP_SIGN)
         super(PlatooningLeaderVehicle, self).pause()
 
     def slow_down_vehicle(self):
-        # TODO: send slow down signal to follower vehicle
+        self.mbox.send(SCHOOL_ZONE_SIGN)
         super(PlatooningLeaderVehicle, self).slow_down_vehicle()
 
 
@@ -232,22 +241,42 @@ class PlatooningFollowerVehicle(VehicleFactory):
     def __init__(self):
         super(PlatooningFollowerVehicle, self).__init__()
 
+        self.client = BluetoothMailboxClient()
+        self.mbox = TextMailbox(MAILBOX_NAME, self.client)
+
+        print('establishing connection...')
+        self.client.connect(SERVER_VEHICLE_NAME)
+        print('connected!')
+
         self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor)
 
-        # TODO: Initialize network configuration for platooning drive
         self.parking_strategy = ReversePerpendicularParkingStrategy(self)
 
+        # TODO: Improve block detection mechanism to use timestamp comparison
+        self.stop_signal_detected = False
+        self.school_zone_signal_detected = False
+
     def detect_pause_block(self):
-        # TODO: detect pause block using message from server vehicle
-        pass
+        if self.mbox.read() == STOP_SIGN and not self.stop_signal_detected:
+            self.stop_signal_detected = True
+            return True
+        else:
+            return False
+
 
     def detect_school_zone_block(self):
-        # TODO: detect school zone block using message from server vehicle
-        pass
+        if self.mbox.read() == SCHOOL_ZONE_SIGN and not self.school_zone_signal_detected:
+            self.school_zone_signal_detected = True
+            return True
+        else:
+            return False
 
     def detect_lab_end_block(self):
-        # TODO: detect lab end block using message from server vehicle
-        pass
+        if self.mbox.read() == LAB_END_SIGN and not self.school_zone_signal_detected:
+            self.school_zone_signal_detected = True
+            return True
+        else:
+            return False
 
     def detect_obstacle(self):
         # TODO: detect obstacle using message from server vehicle
@@ -263,3 +292,17 @@ class PlatooningFollowerVehicle(VehicleFactory):
                 return False
         else:
             return False
+
+    def drive(self, drive_speed, turn_rate=None):
+        weight = 0.5
+        objective_distance_millimeter = 200
+        max_distance_millimeter = 240
+
+        current_distance_millimeter = self._obstacle_sensor.distance()
+        if current_distance_millimeter > max_distance_millimeter:
+            current_distance_millimeter = max_distance_millimeter
+
+        bias = current_distance_millimeter - objective_distance_millimeter
+        drive_speed += weight * bias
+
+        super(PlatooningFollowerVehicle, self).drive(drive_speed=drive_speed, turn_rate=turn_rate)
