@@ -8,7 +8,8 @@ from pybricks.parameters import Port
 from pybricks.robotics import DriveBase
 from pybricks.tools import wait
 
-from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN
+from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN, \
+    OBSTACLE_DETECTED_SIGN, PARKING_LOT_DETECTED, PARKING_ENDED
 from enums import Lane
 from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetector, ObstacleDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
@@ -70,13 +71,16 @@ class VehicleFactory:
                 self.change_lane()
 
             if self.detect_lab_end_block():
-                # TODO: Enable parking lot detector
-                self.lab_finished = True
+                self.set_lab_finished()
 
             if self.detect_parking_lot():
                 self._parking_strategy.start_parking()
+                return
 
             self.drive(self.drive_speed)
+
+    def set_lab_finished(self):
+        self.lab_finished = True
 
     def pause(self):
         pause_duration_milliseconds = 3000
@@ -204,6 +208,8 @@ class StandaloneVehicle(VehicleFactory):
         return self.obstacle_detector.detected()
 
     def detect_parking_lot(self):
+        # FIXME: Resolve error detection at only one obstacle
+        # FIXME: resolve error not sending message
         if self.parking_lot_detector.detected():
             if self.first_parking_lot_indicator_detected:
                 return True
@@ -228,6 +234,10 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
 
         self.parking_strategy = ReversePerpendicularParkingStrategy(self)
 
+    def set_lab_finished(self):
+        self.mbox.send(LAB_END_SIGN)
+        super(PlatooningLeaderVehicle, self).set_lab_finished()
+
     def pause(self):
         self.mbox.send(STOP_SIGN)
         super(PlatooningLeaderVehicle, self).pause()
@@ -236,6 +246,24 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
         self.mbox.send(SCHOOL_ZONE_SIGN)
         super(PlatooningLeaderVehicle, self).slow_down_vehicle()
 
+    def change_lane(self):
+        message = "{}:{}".format(OBSTACLE_DETECTED_SIGN, str(int(time.time())))
+        self.mbox.send(message)
+        super(PlatooningLeaderVehicle, self).change_lane()
+
+    def detect_parking_lot(self):
+        if self.parking_lot_detector.detected():
+            if self.first_parking_lot_indicator_detected:
+                return True
+            else:
+                self.first_parking_lot_indicator_detected = True
+                return False
+        else:
+            return False
+
+    def start_parking(self):
+        super(PlatooningLeaderVehicle, self).start_parking()
+        self.mbox.send(PARKING_ENDED)
 
 class PlatooningFollowerVehicle(VehicleFactory):
     def __init__(self):
@@ -255,6 +283,8 @@ class PlatooningFollowerVehicle(VehicleFactory):
         # TODO: Improve block detection mechanism to use timestamp comparison
         self.stop_signal_detected = False
         self.school_zone_signal_detected = False
+
+        self.obstacle_message_list = []
 
     def detect_pause_block(self):
         if self.mbox.read() == STOP_SIGN and not self.stop_signal_detected:
@@ -279,8 +309,22 @@ class PlatooningFollowerVehicle(VehicleFactory):
             return False
 
     def detect_obstacle(self):
-        # TODO: detect obstacle using message from server vehicle
-        pass
+        current_message = self.mbox.read()
+        if current_message is None:
+            return False
+        try:
+            message_name, sent_at = current_message.split(":")
+        except ValueError:
+            return False
+
+        if message_name == OBSTACLE_DETECTED_SIGN:
+            if sent_at in self.obstacle_message_list:
+                return False
+            else:
+                self.obstacle_message_list.append(sent_at)
+                return True
+        else:
+            return False
 
     def detect_parking_lot(self):
         # TODO: Resolve code duplicates
@@ -304,5 +348,8 @@ class PlatooningFollowerVehicle(VehicleFactory):
 
         bias = current_distance_millimeter - objective_distance_millimeter
         drive_speed += weight * bias
+
+        if drive_speed < 0:
+            drive_speed = 0
 
         super(PlatooningFollowerVehicle, self).drive(drive_speed=drive_speed, turn_rate=turn_rate)
