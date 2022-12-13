@@ -9,9 +9,10 @@ from pybricks.robotics import DriveBase
 from pybricks.tools import wait
 
 from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN, \
-    OBSTACLE_DETECTED_SIGN, PARKING_LOT_DETECTED, PARKING_ENDED
+    OBSTACLE_DETECTED_SIGN, PARKING_ENDED
 from enums import Lane
-from objectdetector import RedColorDetector, BlueColorDetector, YellowColorDetector, ObstacleDetector
+from objectdetector import BlueColorDetector, ObstacleDetector, \
+    SimpleRedColorDetector, SimpleYellowColorDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
 
 
@@ -60,6 +61,8 @@ class VehicleFactory:
         self._beep()
 
         while True:
+            if self.detect_parking_vehicle():
+                self.wait_for_parking()
             # TODO: Implement pre-driving method using detector and handler registry
             if self.detect_pause_block():
                 self.pause()
@@ -78,6 +81,12 @@ class VehicleFactory:
                 return
 
             self.drive(self.drive_speed)
+
+    def detect_parking_vehicle(self):
+        return False
+
+    def wait_for_parking(self):
+        pass
 
     def set_lab_finished(self):
         self.lab_finished = True
@@ -101,7 +110,6 @@ class VehicleFactory:
         self._beep()
 
     def change_lane(self):
-        # TODO: Refactor code
         turn_duration_seconds = 0.8
         return_duration_seconds = 0.8
         proportional_gain = 0.13
@@ -189,9 +197,9 @@ class StandaloneVehicle(VehicleFactory):
         super(StandaloneVehicle, self).__init__()
 
         color_sensor_list = [self._left_color_sensor, self._right_color_sensor]
+        self.yellow_color_detector = SimpleYellowColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
+        self.red_color_detector = SimpleRedColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
         self.blue_color_detector = BlueColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
-        self.yellow_color_detector = YellowColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
-        self.red_color_detector = RedColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
         self.obstacle_detector = ObstacleDetector(queue_len=6, threshold=3, ultrasonic_sensor=self._obstacle_sensor)
         self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=True)
 
@@ -232,7 +240,7 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
         self.server.wait_for_connection()
         print('connected!')
 
-        self.parking_strategy = ReversePerpendicularParkingStrategy(self)
+        self._parking_strategy = ReversePerpendicularParkingStrategy(self)
 
     def set_lab_finished(self):
         self.mbox.send(LAB_END_SIGN)
@@ -254,6 +262,8 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
     def detect_parking_lot(self):
         if self.parking_lot_detector.detected():
             if self.first_parking_lot_indicator_detected:
+                # TODO: Move signaling logic to Separate pre_parking method
+                self.mbox.send(PARKING_ENDED)
                 return True
             else:
                 self.first_parking_lot_indicator_detected = True
@@ -264,6 +274,7 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
     def start_parking(self):
         super(PlatooningLeaderVehicle, self).start_parking()
         self.mbox.send(PARKING_ENDED)
+
 
 class PlatooningFollowerVehicle(VehicleFactory):
     def __init__(self):
@@ -278,7 +289,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
 
         self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor)
 
-        self.parking_strategy = ReversePerpendicularParkingStrategy(self)
+        self._parking_strategy = ReversePerpendicularParkingStrategy(self)
 
         # TODO: Improve block detection mechanism to use timestamp comparison
         self.stop_signal_detected = False
@@ -292,7 +303,6 @@ class PlatooningFollowerVehicle(VehicleFactory):
             return True
         else:
             return False
-
 
     def detect_school_zone_block(self):
         if self.mbox.read() == SCHOOL_ZONE_SIGN and not self.school_zone_signal_detected:
@@ -353,3 +363,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
             drive_speed = 0
 
         super(PlatooningFollowerVehicle, self).drive(drive_speed=drive_speed, turn_rate=turn_rate)
+
+    def detect_parking_vehicle(self):
+        if self.mbox.read() == SCHOOL_ZONE_SIGN:
+            pass

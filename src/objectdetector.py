@@ -1,6 +1,8 @@
 import time
 from abc import abstractmethod
 
+from pybricks.parameters import Color
+
 
 class ObjectDetector:
     UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS = 2
@@ -80,7 +82,7 @@ class ColorDetector(ObjectDetector):
     RGB_LOWER_BOUND = 30
     RGB_UPPER_BOUND = 20
 
-    def __init__(self, queue_len: int, threshold: int, color_sensor_list: list, enabled: bool=True):
+    def __init__(self, queue_len: int, threshold: int, color_sensor_list: list, enabled: bool = True):
         super(ColorDetector, self).__init__(queue_len=queue_len, threshold=threshold, enabled=enabled)
 
         self.color_sensor_list = color_sensor_list
@@ -108,7 +110,7 @@ class RedColorDetector(ColorDetector):
 
 class BlueColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND
+        return rgb.red < 25 and rgb.green < 25 and rgb.blue > 25
 
 
 class YellowColorDetector(ColorDetector):
@@ -126,3 +128,33 @@ class ObstacleDetector(ObjectDetector):
 
     def decision_criteria(self):
         return int(self.ultrasonic_sensor.distance()) < self.OBSTACLE_DETECT_DISTANCE_MILLIMETER
+
+
+class SimpleColorDetector(ObjectDetector):
+    decision_color = None
+
+    def __init__(self, queue_len: int, threshold: int, color_sensor_list: list, enabled: bool = True):
+        super(SimpleColorDetector, self).__init__(queue_len=queue_len, threshold=threshold, enabled=enabled)
+
+        self.color_sensor_list = color_sensor_list
+        self.last_detection_time = 0
+
+    def decision_criteria(self):
+        return any(
+            self._color_detected(color_sensor) for color_sensor in self.color_sensor_list,
+        )
+
+    def _color_detected(self, color_sensor):
+        return color_sensor.color() == self.decision_color
+
+
+class SimpleRedColorDetector(SimpleColorDetector):
+    decision_color = Color.RED
+
+
+class SimpleBlueColorDetector(SimpleColorDetector):
+    decision_color = Color.BLUE
+
+
+class SimpleYellowColorDetector(SimpleColorDetector):
+    decision_color = Color.YELLOW
