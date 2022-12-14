@@ -9,10 +9,10 @@ from pybricks.robotics import DriveBase
 from pybricks.tools import wait
 
 from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN, \
-    OBSTACLE_DETECTED_SIGN, PARKING_ENDED
+    OBSTACLE_DETECTED_SIGN, PARKING_ENDED, PARKING_LOT_DETECTED
 from enums import Lane
 from objectdetector import BlueColorDetector, ObstacleDetector, \
-    SimpleRedColorDetector, SimpleYellowColorDetector
+    SimpleRedColorDetector, SimpleYellowColorDetector, ParkingLotDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
 
 
@@ -44,6 +44,8 @@ class VehicleFactory:
         self.current_lane = Lane.FIRST_LANE
         self.lab_finished = False
         self.first_parking_lot_indicator_detected = False
+
+        self.parking_lot_detector = ParkingLotDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=False)
 
     @classmethod
     def create_vehicle(cls, platooning_mode=PlatooningConfiguration.PLATOONING_OFF):
@@ -89,7 +91,9 @@ class VehicleFactory:
         pass
 
     def set_lab_finished(self):
+        self._beep()
         self.lab_finished = True
+        self.parking_lot_detector.enable()
 
     def pause(self):
         pause_duration_milliseconds = 3000
@@ -201,7 +205,6 @@ class StandaloneVehicle(VehicleFactory):
         self.red_color_detector = SimpleRedColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
         self.blue_color_detector = BlueColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
         self.obstacle_detector = ObstacleDetector(queue_len=6, threshold=3, ultrasonic_sensor=self._obstacle_sensor)
-        self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=True)
 
     def detect_pause_block(self):
         return self.blue_color_detector.detected()
@@ -216,12 +219,12 @@ class StandaloneVehicle(VehicleFactory):
         return self.obstacle_detector.detected()
 
     def detect_parking_lot(self):
-        # FIXME: Resolve error detection at only one obstacle
-        # FIXME: resolve error not sending message
         if self.parking_lot_detector.detected():
             if self.first_parking_lot_indicator_detected:
+                self._beep()
                 return True
             else:
+                self._beep()
                 self.first_parking_lot_indicator_detected = True
                 return False
         else:
@@ -242,30 +245,36 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
 
         self._parking_strategy = ReversePerpendicularParkingStrategy(self)
 
+    def _send_message(self, value: str):
+        message = "{}:{}".format(value, str(int(time.time())))
+        print(message)
+        self.mbox.send(message)
+
     def set_lab_finished(self):
-        self.mbox.send(LAB_END_SIGN)
+        self._send_message(LAB_END_SIGN)
         super(PlatooningLeaderVehicle, self).set_lab_finished()
 
     def pause(self):
-        self.mbox.send(STOP_SIGN)
+        self._send_message(STOP_SIGN)
         super(PlatooningLeaderVehicle, self).pause()
 
     def slow_down_vehicle(self):
-        self.mbox.send(SCHOOL_ZONE_SIGN)
+        self._send_message(SCHOOL_ZONE_SIGN)
         super(PlatooningLeaderVehicle, self).slow_down_vehicle()
 
     def change_lane(self):
-        message = "{}:{}".format(OBSTACLE_DETECTED_SIGN, str(int(time.time())))
-        self.mbox.send(message)
+        self._send_message(OBSTACLE_DETECTED_SIGN)
         super(PlatooningLeaderVehicle, self).change_lane()
 
     def detect_parking_lot(self):
         if self.parking_lot_detector.detected():
             if self.first_parking_lot_indicator_detected:
+                self._beep()
                 # TODO: Move signaling logic to Separate pre_parking method
-                self.mbox.send(PARKING_ENDED)
                 return True
             else:
+                self._beep()
+                self._send_message(PARKING_LOT_DETECTED)
                 self.first_parking_lot_indicator_detected = True
                 return False
         else:
@@ -273,7 +282,7 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
 
     def start_parking(self):
         super(PlatooningLeaderVehicle, self).start_parking()
-        self.mbox.send(PARKING_ENDED)
+        self._send_message(PARKING_ENDED)
 
 
 class PlatooningFollowerVehicle(VehicleFactory):
@@ -298,21 +307,48 @@ class PlatooningFollowerVehicle(VehicleFactory):
         self.obstacle_message_list = []
 
     def detect_pause_block(self):
-        if self.mbox.read() == STOP_SIGN and not self.stop_signal_detected:
+        current_message = self.mbox.read()
+        if current_message is None:
+            return False
+        try:
+            message_name, _ = current_message.split(":")
+        except ValueError:
+            return False
+
+        # TODO: Improve to use timestamp to separate detection
+        if message_name == STOP_SIGN and not self.stop_signal_detected:
             self.stop_signal_detected = True
             return True
         else:
             return False
 
     def detect_school_zone_block(self):
-        if self.mbox.read() == SCHOOL_ZONE_SIGN and not self.school_zone_signal_detected:
+        current_message = self.mbox.read()
+        if current_message is None:
+            return False
+        try:
+            message_name, _ = current_message.split(":")
+        except ValueError:
+            return False
+
+        # TODO: Improve to use timestamp to separate detection
+        if message_name == SCHOOL_ZONE_SIGN and not self.school_zone_signal_detected:
             self.school_zone_signal_detected = True
             return True
         else:
             return False
 
     def detect_lab_end_block(self):
-        if self.mbox.read() == LAB_END_SIGN and not self.school_zone_signal_detected:
+        current_message = self.mbox.read()
+        if current_message is None:
+            return False
+        try:
+            message_name, _ = current_message.split(":")
+        except ValueError:
+            return False
+
+        # TODO: Improve to use timestamp to separate detection
+        if message_name == LAB_END_SIGN and not self.school_zone_signal_detected:
             self.school_zone_signal_detected = True
             return True
         else:
@@ -365,5 +401,15 @@ class PlatooningFollowerVehicle(VehicleFactory):
         super(PlatooningFollowerVehicle, self).drive(drive_speed=drive_speed, turn_rate=turn_rate)
 
     def detect_parking_vehicle(self):
-        if self.mbox.read() == SCHOOL_ZONE_SIGN:
+        # TODO: Extract method and handle exception
+        current_message = self.mbox.read()
+        if current_message is None:
+            return False
+        try:
+            message_name, _ = current_message.split(":")
+        except ValueError:
+            return False
+
+        # TODO: Improve to use timestamp to separate detection
+        if message_name == SCHOOL_ZONE_SIGN:
             pass

@@ -36,15 +36,9 @@ class ObjectDetector:
         pass
 
     def enable(self):
-        if self._enabled:
-            raise Exception("Error: {} is already enabled".format(self.__class__.__name__))
-
         self._enabled = True
 
     def disable(self):
-        if not self._enabled:
-            raise Exception("Error: {} is already disabled".format(self.__class__.__name__))
-
         self._enabled = False
 
     def _add_detection_result(self, result: bool):
@@ -109,8 +103,11 @@ class RedColorDetector(ColorDetector):
 
 
 class BlueColorDetector(ColorDetector):
+    RGB_LOWER_BOUND = 25
+    RGB_UPPER_BOUND = 25
+
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red < 25 and rgb.green < 25 and rgb.blue > 25
+        return rgb.red < self.RGB_UPPER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue > self.RGB_LOWER_BOUND
 
 
 class YellowColorDetector(ColorDetector):
@@ -128,6 +125,10 @@ class ObstacleDetector(ObjectDetector):
 
     def decision_criteria(self):
         return int(self.ultrasonic_sensor.distance()) < self.OBSTACLE_DETECT_DISTANCE_MILLIMETER
+
+
+class ParkingLotDetector(ObstacleDetector):
+    OBSTACLE_DETECT_DISTANCE_MILLIMETER = 100
 
 
 class SimpleColorDetector(ObjectDetector):
