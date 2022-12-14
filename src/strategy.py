@@ -51,11 +51,11 @@ class ReversePerpendicularParkingStrategy(ParkingStrategy):
             self.vehicle.drive(drive_speed=reverse_drive_speed, turn_rate=0)
 
         turn_start_time = time.time()
-        while time.time() - turn_start_time <= 2:
+        while time.time() - turn_start_time <= 1.7:
             self.vehicle.drive(drive_speed=reverse_drive_speed, turn_rate=-50)
 
         wait(500)
 
         straight_start_time = time.time()
-        while time.time() - straight_start_time <= 0.75:
+        while time.time() - straight_start_time <= 1.5:
             self.vehicle.drive(drive_speed=reverse_drive_speed, turn_rate=0)
