@@ -79,7 +79,7 @@ class VehicleFactory:
                 self.set_lab_finished()
 
             if self.detect_parking_lot():
-                self._parking_strategy.start_parking()
+                self.start_parking()
                 return
 
             self.drive(self.drive_speed)
