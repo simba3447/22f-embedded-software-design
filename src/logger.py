@@ -5,11 +5,12 @@ from pybricks.tools import DataLog, StopWatch
 
 class EventLogger:
     INFO = 'INFO'
+    DEBUG = 'DEBUG'
     WARNING = 'WARNING'
     ERROR = 'ERROR'
 
     def __init__(self):
-        self._logger = DataLog('time', 'elapsed_time', 'level', 'message')
+        self._logger = DataLog('time', 'elapsed_time', 'level', 'message', name='event_log')
         self._stop_watch = StopWatch()
 
     def _log(self, level, message):
@@ -23,8 +24,25 @@ class EventLogger:
     def info(self, message):
         self._log(self.INFO, message)
 
+    def debug(self, message):
+        self._log(self.DEBUG, message)
+
     def warning(self, message):
         self._log(self.WARNING, message)
 
     def error(self, message):
         self._log(self.ERROR, message)
+
+
+class ColorSensorLogger:
+    INFO = 'INFO'
+    DEBUG = 'DEBUG'
+    WARNING = 'WARNING'
+    ERROR = 'ERROR'
+
+    def __init__(self):
+        self._logger = DataLog('elapsed_time', 'left_sensor_color', 'left_sensor_rgb', 'right_sensor_color', 'right_sensor_rgb', name="color_sensor_log")
+        self._stop_watch = StopWatch()
+
+    def log(self, left_sensor_color, left_sensor_rgb, right_sensor_color, right_sensor_rgb):
+        self._logger.log(self._stop_watch.time(), left_sensor_color, left_sensor_rgb, right_sensor_color, right_sensor_rgb)
