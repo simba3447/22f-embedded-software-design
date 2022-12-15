@@ -49,7 +49,6 @@ class VehicleFactory:
         self.first_parking_lot_indicator_detected = False
 
         self.parking_lot_detector = ParkingLotDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=False)
-        self.logger.info('Vehicle Initialized')
 
     @classmethod
     def create_vehicle(cls, platooning_mode=PlatooningConfiguration.PLATOONING_OFF):
@@ -64,6 +63,7 @@ class VehicleFactory:
             raise Exception('platooning_mode not defined')
 
     def start_driving(self):
+        self.logger.info("Started Driving")
         self._beep()
 
         while True:
@@ -71,22 +71,29 @@ class VehicleFactory:
                 self.wait_for_parking()
             # TODO: Implement pre-driving method using detector and handler registry
             if self.detect_pause_block():
+                self.logger.info("Pause Block Detected")
                 self.pause()
 
             if self.detect_school_zone_block():
+                self.logger.info("School Zone Block Detected")
                 self.slow_down_vehicle()
 
             if self.detect_obstacle():
+                self.logger.info("Obstacle Detected")
                 self.change_lane()
 
             if self.detect_lab_end_block():
+                self.logger.info("Lab End Block Detected")
                 self.set_lab_finished()
 
             if self.detect_parking_lot():
+                self.logger.info("Parking Lot Detected")
                 self.start_parking()
-                return
+                break
 
             self.drive(self.drive_speed)
+
+        self.logger.info("Finished Driving")
 
     def detect_parking_vehicle(self):
         return False
@@ -323,6 +330,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
 
         # TODO: Improve to use timestamp to separate detection
         if message_name == STOP_SIGN and not self.stop_signal_detected:
+            self.logger.info("STOP_SIGN message received: " + current_message)
             self.stop_signal_detected = True
             return True
         else:
@@ -339,6 +347,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
 
         # TODO: Improve to use timestamp to separate detection
         if message_name == SCHOOL_ZONE_SIGN and not self.school_zone_signal_detected:
+            self.logger.info("SCHOOL_ZONE_SIGN message received: " + current_message)
             self.school_zone_signal_detected = True
             return True
         else:
@@ -355,6 +364,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
 
         # TODO: Improve to use timestamp to separate detection
         if message_name == LAB_END_SIGN and not self.school_zone_signal_detected:
+            self.logger.info("LAB_END_SIGN message received: " + current_message)
             self.school_zone_signal_detected = True
             return True
         else:
@@ -374,6 +384,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
                 return False
             else:
                 self.obstacle_message_list.append(sent_at)
+                self.logger.info("OBSTACLE_DETECTED_SIGN message received: " + current_message)
                 return True
         else:
             return False
@@ -417,5 +428,24 @@ class PlatooningFollowerVehicle(VehicleFactory):
             return False
 
         # TODO: Improve to use timestamp to separate detection
-        if message_name == SCHOOL_ZONE_SIGN:
-            pass
+        if message_name == PARKING_LOT_DETECTED:
+            self.logger.info("PARKING_LOT_DETECTED message received: " + current_message)
+            return True
+
+    def wait_for_parking(self):
+        self._beep()
+        self._stop()
+
+        while True:
+            current_message = self.mbox.wait_new()
+            try:
+                message_name, _ = current_message.split(":")
+            except ValueError:
+                self.logger.error("Badly formatted message received: '{}'".format(current_message))
+                return False
+
+            if message_name == PARKING_ENDED:
+                self.logger.info("PARKING_ENDED message received: " + current_message)
+                break
+
+        self._beep()
