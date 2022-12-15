@@ -11,6 +11,7 @@ from pybricks.tools import wait
 from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN, \
     OBSTACLE_DETECTED_SIGN, PARKING_ENDED, PARKING_LOT_DETECTED
 from enums import Lane
+from logger import EventLogger
 from objectdetector import BlueColorDetector, ObstacleDetector, \
     SimpleRedColorDetector, SimpleYellowColorDetector, ParkingLotDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
@@ -26,6 +27,8 @@ class VehicleFactory:
     proportional_gain = 0.8
 
     def __init__(self):
+        self.logger = EventLogger()
+
         # Initialize EV3 hardware components
         self._left_color_sensor = ColorSensor(Port.S1)
         self._right_color_sensor = ColorSensor(Port.S4)
@@ -46,6 +49,7 @@ class VehicleFactory:
         self.first_parking_lot_indicator_detected = False
 
         self.parking_lot_detector = ParkingLotDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=False)
+        self.logger.info('Vehicle Initialized')
 
     @classmethod
     def create_vehicle(cls, platooning_mode=PlatooningConfiguration.PLATOONING_OFF):
@@ -239,16 +243,16 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
         self.mbox = TextMailbox(MAILBOX_NAME, self.server)
 
         # The server must be started before the client!
-        print('waiting for connection...')
+        self.logger.info('waiting for connection...')
         self.server.wait_for_connection()
-        print('connected!')
+        self.logger.info('connected!')
 
         self._parking_strategy = ReversePerpendicularParkingStrategy(self)
 
     def _send_message(self, value: str):
         message = "{}:{}".format(value, str(int(time.time())))
-        print(message)
         self.mbox.send(message)
+        self.logger.info("Message sent: '{}'".format(message))
 
     def set_lab_finished(self):
         self._send_message(LAB_END_SIGN)
@@ -292,11 +296,12 @@ class PlatooningFollowerVehicle(VehicleFactory):
         self.client = BluetoothMailboxClient()
         self.mbox = TextMailbox(MAILBOX_NAME, self.client)
 
-        print('establishing connection...')
+        self.logger.info('establishing connection...')
         self.client.connect(SERVER_VEHICLE_NAME)
-        print('connected!')
+        self.logger.info('connected!')
 
-        self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor)
+        self.parking_lot_detector = ObstacleDetector(queue_len=3, threshold=2,
+                                                     ultrasonic_sensor=self._parking_lot_sensor)
 
         self._parking_strategy = ReversePerpendicularParkingStrategy(self)
 
@@ -313,6 +318,7 @@ class PlatooningFollowerVehicle(VehicleFactory):
         try:
             message_name, _ = current_message.split(":")
         except ValueError:
+            self.logger.error("Badly formatted message received: '{}'".format(current_message))
             return False
 
         # TODO: Improve to use timestamp to separate detection
