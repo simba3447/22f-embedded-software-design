@@ -11,7 +11,7 @@ from pybricks.tools import wait
 from constants import STOP_SIGN, MAILBOX_NAME, SERVER_VEHICLE_NAME, SCHOOL_ZONE_SIGN, LAB_END_SIGN, \
     OBSTACLE_DETECTED_SIGN, PARKING_ENDED, PARKING_LOT_DETECTED
 from enums import Lane
-from logger import EventLogger
+from logger import EventLogger, ColorSensorLogger
 from objectdetector import BlueColorDetector, ObstacleDetector, \
     SimpleRedColorDetector, SimpleYellowColorDetector, ParkingLotDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
@@ -28,6 +28,7 @@ class VehicleFactory:
 
     def __init__(self):
         self.logger = EventLogger()
+        self.data_logger = ColorSensorLogger()
 
         # Initialize EV3 hardware components
         self._left_color_sensor = ColorSensor(Port.S1)
@@ -40,6 +41,8 @@ class VehicleFactory:
 
         self._ev3_brick = EV3Brick()
         self._drive_base = DriveBase(self._motor_left, self._motor_right, wheel_diameter=55.5, axle_track=104)
+        self.parking_lot_detector = ParkingLotDetector(queue_len=2, threshold=1,
+                                                       ultrasonic_sensor=self._parking_lot_sensor, enabled=False)
 
         self._parking_strategy = ParallelParkingStrategy(self)
 
@@ -47,8 +50,6 @@ class VehicleFactory:
         self.current_lane = Lane.FIRST_LANE
         self.lab_finished = False
         self.first_parking_lot_indicator_detected = False
-
-        self.parking_lot_detector = ParkingLotDetector(queue_len=3, threshold=2, ultrasonic_sensor=self._parking_lot_sensor, enabled=False)
 
     @classmethod
     def create_vehicle(cls, platooning_mode=PlatooningConfiguration.PLATOONING_OFF):
@@ -67,6 +68,7 @@ class VehicleFactory:
         self._beep()
 
         while True:
+            self.data_logger.log(self._left_color_sensor.color(), self._left_color_sensor.rgb(), self._right_color_sensor.color(), self._right_color_sensor.rgb())
             if self.detect_parking_vehicle():
                 self.wait_for_parking()
             # TODO: Implement pre-driving method using detector and handler registry
@@ -107,14 +109,17 @@ class VehicleFactory:
         self.parking_lot_detector.enable()
 
     def pause(self):
+        self.logger.info("Paused Driving")
         pause_duration_milliseconds = 3000
 
         self._beep()
         self._stop()
         wait(pause_duration_milliseconds)
         self._beep()
+        self.logger.info("Resume Driving")
 
     def slow_down_vehicle(self):
+        self.logger.info("Start Driving at Half Speed")
         slow_drive_speed = self.drive_speed / 2
         slow_drive_duration_seconds = 2.5
         slow_down_start_time = time.time()
@@ -123,6 +128,7 @@ class VehicleFactory:
         while time.time() - slow_down_start_time <= slow_drive_duration_seconds:
             self.drive(slow_drive_speed)
         self._beep()
+        self.logger.info("Resume Driving")
 
     def change_lane(self):
         turn_duration_seconds = 0.8
@@ -232,9 +238,13 @@ class StandaloneVehicle(VehicleFactory):
     def detect_parking_lot(self):
         if self.parking_lot_detector.detected():
             if self.first_parking_lot_indicator_detected:
+
+                self.logger.info("Second Parking Log Indicator Detected")
                 self._beep()
                 return True
             else:
+
+                self.logger.info("First Parking Log Indicator Detected")
                 self._beep()
                 self.first_parking_lot_indicator_detected = True
                 return False
@@ -280,6 +290,7 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
     def detect_parking_lot(self):
         if self.parking_lot_detector.detected():
             if self.first_parking_lot_indicator_detected:
+                self.logger.info("Second Parking Log Indicator Detected")
                 self._beep()
                 # TODO: Move signaling logic to Separate pre_parking method
                 return True
@@ -287,6 +298,7 @@ class PlatooningLeaderVehicle(StandaloneVehicle):
                 self._beep()
                 self._send_message(PARKING_LOT_DETECTED)
                 self.first_parking_lot_indicator_detected = True
+                self.logger.info("First Parking Log Indicator Detected")
                 return False
         else:
             return False
@@ -416,6 +428,12 @@ class PlatooningFollowerVehicle(VehicleFactory):
             drive_speed = 0
 
         super(PlatooningFollowerVehicle, self).drive(drive_speed=drive_speed, turn_rate=turn_rate)
+
+    def change_lane(self):
+        # Delay starting to change lane due to the different speed of two vehicles
+        self._stop()
+        wait(1500)
+        super(PlatooningFollowerVehicle, self).change_lane()
 
     def detect_parking_vehicle(self):
         # TODO: Extract method and handle exception
