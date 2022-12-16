@@ -42,7 +42,7 @@ class PlatooningMessageRegistry:
     _data = {}
 
     def insert(self, message: PlatooningMessage):
-        if message.code in self._data:
+        if message.code not in self._data:
             self._data[message.code] = [message.timestamp]
         else:
             self._data[message.code].append(message.timestamp)
