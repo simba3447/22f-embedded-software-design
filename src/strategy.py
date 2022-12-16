@@ -42,20 +42,21 @@ class ParallelParkingStrategy(ParkingStrategy):
 
 class ReversePerpendicularParkingStrategy(ParkingStrategy):
     def start_parking(self):
+        # TODO: Fix to use public method of vehicle for driving
         reverse_drive_speed = self.vehicle.drive_speed * -0.5
 
         wait(500)
 
         straight_start_time = time.time()
         while time.time() - straight_start_time <= 1.5:
-            self.vehicle.drive(drive_speed=reverse_drive_speed, turn_rate=0)
+            self.vehicle._drive_base.drive(drive_speed=reverse_drive_speed, turn_rate=0)
 
         turn_start_time = time.time()
         while time.time() - turn_start_time <= 1.7:
-            self.vehicle.drive(drive_speed=reverse_drive_speed, turn_rate=-50)
+            self.vehicle._drive_base.drive(drive_speed=reverse_drive_speed, turn_rate=-50)
 
         wait(500)
 
         straight_start_time = time.time()
         while time.time() - straight_start_time <= 1.5:
-            self.vehicle.drive(drive_speed=reverse_drive_speed, turn_rate=0)
+            self.vehicle._drive_base.drive(drive_speed=reverse_drive_speed, turn_rate=0)
