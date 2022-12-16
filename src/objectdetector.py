@@ -103,16 +103,13 @@ class RedColorDetector(ColorDetector):
 
 
 class BlueColorDetector(ColorDetector):
-    RGB_LOWER_BOUND = 25
-    RGB_UPPER_BOUND = 25
-
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red < self.RGB_UPPER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue > self.RGB_LOWER_BOUND
+        return rgb.red < 20 and rgb.green < 30 and rgb.blue > 30
 
 
 class YellowColorDetector(ColorDetector):
     def color_decision_criteria(self, rgb: ColorDetector.RGB):
-        return rgb.red > self.RGB_LOWER_BOUND and rgb.green < self.RGB_UPPER_BOUND and rgb.blue < self.RGB_UPPER_BOUND
+        return rgb.red > 30 and rgb.green > 30 and rgb.blue < 20
 
 
 class ObstacleDetector(ObjectDetector):

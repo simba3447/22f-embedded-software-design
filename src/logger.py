@@ -41,8 +41,8 @@ class ColorSensorLogger:
     ERROR = 'ERROR'
 
     def __init__(self):
-        self._logger = DataLog('elapsed_time', 'left_sensor_color', 'left_sensor_rgb', 'right_sensor_color', 'right_sensor_rgb', name="color_sensor_log")
+        self._logger = DataLog('elapsed_time', 'left_sensor_color', 'left_sensor_r', 'left_sensor_g', 'left_sensor_b', 'right_sensor_color', 'right_sensor_r','right_sensor_g','right_sensor_b', name="color_sensor_log")
         self._stop_watch = StopWatch()
 
     def log(self, left_sensor_color, left_sensor_rgb, right_sensor_color, right_sensor_rgb):
-        self._logger.log(self._stop_watch.time(), left_sensor_color, left_sensor_rgb, right_sensor_color, right_sensor_rgb)
+        self._logger.log(self._stop_watch.time(), left_sensor_color, left_sensor_rgb[0], left_sensor_rgb[1], left_sensor_rgb[2], right_sensor_color, right_sensor_rgb[0], right_sensor_rgb[1], right_sensor_rgb[2])

@@ -12,7 +12,7 @@ from constants import MAILBOX_NAME, SERVER_VEHICLE_NAME
 from enums import Lane
 from logger import EventLogger, ColorSensorLogger
 from objectdetector import BlueColorDetector, ObstacleDetector, \
-    SimpleRedColorDetector, SimpleYellowColorDetector, ParkingLotDetector
+    SimpleRedColorDetector, ParkingLotDetector, YellowColorDetector
 from strategy import ParallelParkingStrategy, ReversePerpendicularParkingStrategy
 from utility import PlatooningMessage, WrongMessageFormat, PlatooningMessageRegistry
 
@@ -48,7 +48,6 @@ class VehicleFactory:
 
         # Set vehicle's initial states
         self.current_lane = Lane.FIRST_LANE
-        self.lab_finished = False
         self.first_parking_lot_indicator_detected = False
 
     @classmethod
@@ -111,7 +110,6 @@ class VehicleFactory:
 
     def set_lab_finished(self):
         self._beep()
-        self.lab_finished = True
         self.parking_lot_detector.enable()
 
     def pause(self):
@@ -234,11 +232,11 @@ class StandaloneVehicle(VehicleFactory):
         super(StandaloneVehicle, self).__init__()
 
         color_sensor_list = [self._left_color_sensor, self._right_color_sensor]
-        self.yellow_color_detector = SimpleYellowColorDetector(queue_len=4, threshold=3,
-                                                               color_sensor_list=color_sensor_list)
-        self.red_color_detector = SimpleRedColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
-        self.blue_color_detector = BlueColorDetector(queue_len=2, threshold=1, color_sensor_list=color_sensor_list)
         self.obstacle_detector = ObstacleDetector(queue_len=6, threshold=3, ultrasonic_sensor=self._obstacle_sensor)
+
+        self.red_color_detector = SimpleRedColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
+        self.yellow_color_detector = YellowColorDetector(queue_len=3, threshold=3, color_sensor_list=color_sensor_list)
+        self.blue_color_detector = BlueColorDetector(queue_len=3, threshold=2, color_sensor_list=color_sensor_list)
 
     def detect_pause_block(self):
         return self.blue_color_detector.detected()

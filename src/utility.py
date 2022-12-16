@@ -15,8 +15,8 @@ class PlatooningMessage:
     PARKING_ENDED = 'parking-ended'
 
     def __init__(self, code: str, timestamp: int):
-        self.code: str = code
-        self.timestamp: int = timestamp
+        self.code = code
+        self.timestamp = timestamp
 
     def __str__(self):
         return "{}:{}".format(self.code, self.timestamp)
