@@ -236,6 +236,7 @@ class StandaloneVehicle(VehicleFactory):
 
         self.red_color_detector = SimpleRedColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
         self.yellow_color_detector = YellowColorDetector(queue_len=3, threshold=3, color_sensor_list=color_sensor_list)
+        self.yellow_color_detector = YellowColorDetector(queue_len=3, threshold=2, color_sensor_list=color_sensor_list)
         self.blue_color_detector = BlueColorDetector(queue_len=3, threshold=2, color_sensor_list=color_sensor_list)
 
     def detect_pause_block(self):
