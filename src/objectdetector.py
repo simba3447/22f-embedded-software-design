@@ -7,7 +7,7 @@ from pybricks.parameters import Color
 class ObjectDetector:
     UNIQUE_OBJECT_DETECTION_INTERVAL_SECONDS = 2
 
-    def __init__(self, queue_len: int, threshold: int, enabled: bool=True):
+    def __init__(self, queue_len: int, threshold: int, enabled: bool = True):
         if threshold > queue_len:
             raise Exception("Error: Value of decision criteria could not be more than the length of queue")
 
@@ -80,7 +80,6 @@ class ColorDetector(ObjectDetector):
         super(ColorDetector, self).__init__(queue_len=queue_len, threshold=threshold, enabled=enabled)
 
         self.color_sensor_list = color_sensor_list
-        self.last_detection_time = 0
 
     def decision_criteria(self):
         return any(

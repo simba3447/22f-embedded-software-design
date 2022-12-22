@@ -235,7 +235,6 @@ class StandaloneVehicle(VehicleFactory):
         self.obstacle_detector = ObstacleDetector(queue_len=6, threshold=3, ultrasonic_sensor=self._obstacle_sensor)
 
         self.red_color_detector = SimpleRedColorDetector(queue_len=4, threshold=3, color_sensor_list=color_sensor_list)
-        self.yellow_color_detector = YellowColorDetector(queue_len=3, threshold=3, color_sensor_list=color_sensor_list)
         self.yellow_color_detector = YellowColorDetector(queue_len=3, threshold=2, color_sensor_list=color_sensor_list)
         self.blue_color_detector = BlueColorDetector(queue_len=3, threshold=2, color_sensor_list=color_sensor_list)
 
